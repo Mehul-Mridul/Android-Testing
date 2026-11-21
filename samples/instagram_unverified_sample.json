@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "id": "sample-instagram-needs-calibration",
+  "name": "Instagram 2 Photos 1 Video - SAMPLE NOT CALIBRATED",
+  "description": "Example schema only. Replace unknown selectors with real observed IDs/descriptions and verify the workflow manually.",
+  "folder": "Samples",
+  "apps": [{"packageName": "com.instagram.android", "displayName": "Instagram", "recordedVersion": "unknown"}],
+  "recordedDevice": {"manufacturer": "unknown", "model": "unknown", "androidSdk": 0, "widthPx": 0, "heightPx": 0, "densityDpi": 0},
+  "createdAtEpochMs": 1795120000000,
+  "modifiedAtEpochMs": 1795120000000,
+  "media": {"photos": 2, "videos": 1, "videoDurationMs": 5000, "durationToleranceMs": 2000},
+  "steps": [
+    {"id": "step-01", "label": "Launch Instagram", "kind": "LAUNCH_APP", "packageName": "com.instagram.android", "waitMs": 0, "timeoutMs": 8000, "gestureDurationMs": 300, "maxAttempts": 2, "needsReview": false},
+    {"id": "step-02", "label": "Open Story camera - set observed selector", "kind": "TAP", "packageName": "com.instagram.android", "locator": {"allowCoordinateFallback": false}, "timeoutMs": 8000, "maxAttempts": 2, "needsReview": true},
+    {"id": "step-03", "label": "Capture photo 1 - set selector", "kind": "TAKE_PHOTO", "packageName": "com.instagram.android", "locator": {"allowCoordinateFallback": false}, "timeoutMs": 8000, "maxAttempts": 1, "needsReview": true},
+    {"id": "step-04", "label": "Save photo 1 - set selector", "kind": "TAP", "packageName": "com.instagram.android", "locator": {"allowCoordinateFallback": false}, "timeoutMs": 8000, "maxAttempts": 2, "needsReview": true},
+    {"id": "step-05", "label": "Return to camera", "kind": "PRESS_BACK", "packageName": "com.instagram.android", "timeoutMs": 8000, "maxAttempts": 1},
+    {"id": "step-06", "label": "Capture photo 2 - set selector", "kind": "TAKE_PHOTO", "packageName": "com.instagram.android", "locator": {"allowCoordinateFallback": false}, "timeoutMs": 8000, "maxAttempts": 1, "needsReview": true},
+    {"id": "step-07", "label": "Save photo 2 - set selector", "kind": "TAP", "packageName": "com.instagram.android", "locator": {"allowCoordinateFallback": false}, "timeoutMs": 8000, "maxAttempts": 2, "needsReview": true},
+    {"id": "step-08", "label": "Return to camera", "kind": "PRESS_BACK", "packageName": "com.instagram.android", "timeoutMs": 8000, "maxAttempts": 1},
+    {"id": "step-09", "label": "Enter video mode - set selector", "kind": "TAP", "packageName": "com.instagram.android", "locator": {"allowCoordinateFallback": false}, "timeoutMs": 8000, "maxAttempts": 2, "needsReview": true},
+    {"id": "step-10", "label": "Start video - set selector", "kind": "START_VIDEO", "packageName": "com.instagram.android", "locator": {"allowCoordinateFallback": false}, "timeoutMs": 8000, "maxAttempts": 1, "needsReview": true},
+    {"id": "step-11", "label": "Stop video after configured 5 seconds - set selector", "kind": "STOP_VIDEO", "packageName": "com.instagram.android", "locator": {"allowCoordinateFallback": false}, "timeoutMs": 8000, "maxAttempts": 1, "needsReview": true},
+    {"id": "step-12", "label": "Save video locally - set selector", "kind": "TAP", "packageName": "com.instagram.android", "locator": {"allowCoordinateFallback": false}, "timeoutMs": 8000, "maxAttempts": 2, "needsReview": true},
+    {"id": "step-13", "label": "Verify two photos and one video", "kind": "VERIFY_MEDIA", "packageName": "com.instagram.android", "timeoutMs": 8000, "maxAttempts": 1}
+  ]
+}

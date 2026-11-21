@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">3P Capture Automator</string>
+    <string name="accessibility_description">Authorized, visible camera QA sessions only. Records supported UI events for explicitly selected apps and replays user-defined test presets. No password or OTP collection.</string>
+</resources>
