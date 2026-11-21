@@ -101,6 +101,7 @@ class UiResolver(private val service: AutomationAccessibilityService,
             if (service.activePackage() != packageName || !stateReady()) return null
             val match = resolve(locator) ?: return null
             val node = match.node
+            if (!node.refresh() || score(node, locator ?: return null) < .75f) return null
             val bounds = Rect().also { node.getBoundsInScreen(it) }
             val window = service.currentWindowBounds()
             return match.takeIf { node.packageName?.toString() == packageName &&

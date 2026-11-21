@@ -15,10 +15,14 @@ class CameraUi(private val service: AutomationAccessibilityService, private val 
         fun observe(root: AccessibilityNodeInfo?): Observation {
             if (root?.packageName?.toString() != CameraPolicy.PACKAGE)
                 return Observation(CameraState.UNKNOWN, mapOf("targetForeground" to "false"))
+            if (!root.refresh()) return Observation(CameraState.UNKNOWN, mapOf("rootFresh" to "false"))
             val visible = mutableListOf<AccessibilityNodeInfo>()
             var visited = 0
             fun walk(node: AccessibilityNodeInfo, depth: Int) {
                 if (++visited > 1000 || depth > 40) return
+                val id = node.viewIdResourceName.orEmpty()
+                if ((id == CameraPolicy.SHUTTER || id == CameraPolicy.MODE_STRIP ||
+                        node.contentDescription?.toString() in setOf("PhotoMode", "VideoMode")) && !node.refresh()) return
                 if (node.packageName?.toString() == CameraPolicy.PACKAGE && node.isVisibleToUser) visible += node
                 for (i in 0 until node.childCount) node.getChild(i)?.let { walk(it, depth + 1) }
             }
@@ -101,7 +105,9 @@ class CameraUi(private val service: AutomationAccessibilityService, private val 
             ActionKind.STOP_VIDEO -> CameraState.VIDEO_READY
             else -> CameraState.PHOTO_READY
         }
-        val confirmed = waitFor(post, timeoutMs)
+        // OEM Camera can keep the shutter disabled while finalizing a video. Content-change
+        // updates and refreshed controls must establish readiness before the next mode/photo.
+        val confirmed = waitFor(post, if (kind == ActionKind.STOP_VIDEO) maxOf(timeoutMs, 20_000) else timeoutMs)
         if (confirmed && kind == ActionKind.STOP_VIDEO) recordingStartedAtElapsedMs = null
         val commandDuration = if (kind == ActionKind.STOP_VIDEO && startBeforeAction != null) dispatchedAt - startBeforeAction else 0
         return confirmed to "CAMERA_ACTION: kind=$kind gestureCompleted=true stateConfirmed=$confirmed expected=$post observed=${state()} commandVideoDurationMs=$commandDuration; media still requires verification; no capture retry"
