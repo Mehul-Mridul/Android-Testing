@@ -19,7 +19,14 @@ class ValidationTest {
             AutomationStep(label = "Tap", kind = ActionKind.TAP),
             AutomationStep(label = "Text", kind = ActionKind.ENTER_TEXT)
         ))
-        assertEquals(2, PresetValidation.errors(preset).size)
+        assertEquals(
+            listOf(
+                "Step 1 needs a locator",
+                "Step 2 needs explicit tester-supplied text",
+                "Step 2 needs a locator"
+            ),
+            PresetValidation.errors(preset)
+        )
     }
 
     @Test fun `unverifiable media never passes`() {
