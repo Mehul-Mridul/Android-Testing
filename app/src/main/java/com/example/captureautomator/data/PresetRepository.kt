@@ -16,7 +16,7 @@ object Codec {
     fun parsePreset(json: String): Preset {
         require(json.length <= 2_000_000) { "Preset file too large" }
         val obj = JsonParser.parseString(json).asJsonObject
-        require(obj.get("schemaVersion")?.asInt == 1) { "Unsupported preset schema" }
+        require(obj.get("schemaVersion")?.asInt in 1..2) { "Unsupported preset schema" }
         require(obj.has("steps") && obj.has("apps") && obj.has("name")) { "Incomplete preset" }
         val preset = gson.fromJson(obj, Preset::class.java)
         requireNotNull(preset)

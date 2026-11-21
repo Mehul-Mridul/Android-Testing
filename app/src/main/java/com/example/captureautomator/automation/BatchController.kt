@@ -29,7 +29,7 @@ object BatchController {
 
     fun run(context: Context, presets: List<Preset>, repository: PresetRepository, stopOnFail: Boolean) {
         if (mutable.value.running || job?.isActive == true || ExecutionController.state.value.running ||
-            RecordingSession.state.value?.active == true) return
+            RecordingSession.state.value?.active == true || TouchCalibration.state.value.running) return
         val service = AutomationAccessibilityService.instance
         if (service == null || presets.isEmpty()) {
             mutable.value = BatchUiState(error = "Enable accessibility and select at least one preset")

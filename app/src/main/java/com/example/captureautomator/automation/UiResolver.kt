@@ -12,9 +12,14 @@ import com.example.captureautomator.core.UiCandidate
 import com.example.captureautomator.core.SelectorPolicy
 import com.example.captureautomator.core.PlaybackTiming
 import com.example.captureautomator.core.captureOnce
+import com.example.captureautomator.core.TouchStroke
+import com.example.captureautomator.core.TouchProfile
+import com.example.captureautomator.core.TouchPolicy
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlin.math.abs
 
 /** Fail-closed semantic matching. Coordinates are NEVER used without explicit preset opt-in. */
@@ -200,6 +205,32 @@ class UiResolver(private val service: AutomationAccessibilityService,
         val b = service.currentWindowBounds()
         return (b.left + b.width() * x.coerceIn(0f, 1f)) to
             (b.top + b.height() * y.coerceIn(0f, 1f))
+    }
+
+    /** One raw stroke, with no selector or camera-mode inference and no retry. */
+    suspend fun replayTouch(stroke: TouchStroke, profile: TouchProfile,
+                            ready: () -> Boolean, onDispatch: () -> Unit = {}): Pair<Boolean, String> {
+        if (TouchPolicy.errors(stroke).isNotEmpty()) return false to "TOUCH_INVALID: path rejected"
+        timing.waitMs(0)
+        if (!ready()) return false to "TOUCH_INCOMPATIBLE: foreground/window changed; no gesture sent"
+        val path = Path()
+        stroke.points.forEachIndexed { index, point ->
+            val (x, y) = TouchPolicy.map(point, profile)
+            if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        val description = GestureDescription.Builder().addStroke(
+            GestureDescription.StrokeDescription(path, 0, stroke.durationMs)).build()
+        val deferred = CompletableDeferred<Boolean>()
+        onDispatch()
+        currentCoroutineContext().ensureActive()
+        if (!ready()) return false to "TOUCH_INCOMPATIBLE: state changed before dispatch; no gesture sent"
+        val dispatched = service.dispatchGesture(description, object : AccessibilityService.GestureResultCallback() {
+            override fun onCompleted(gestureDescription: GestureDescription?) { deferred.complete(true) }
+            override fun onCancelled(gestureDescription: GestureDescription?) { deferred.complete(false) }
+        }, Handler(Looper.getMainLooper()))
+        val completed = dispatched && (withTimeoutOrNull(stroke.durationMs + 2000) { deferred.await() } ?: false)
+        return completed to if (completed) "TOUCH_GESTURE_COMPLETED: one recorded stroke; media not yet verified"
+            else "TOUCH_GESTURE_FAILED_OR_UNCERTAIN: not retried"
     }
 
     private suspend fun gesture(x: Float, y: Float, endX: Float, endY: Float, duration: Long): Boolean {

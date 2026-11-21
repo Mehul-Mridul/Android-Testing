@@ -3,7 +3,28 @@ package com.example.captureautomator.core
 object PresetValidation {
     fun errors(preset: Preset): List<String> {
         val errors = mutableListOf<String>()
-        if (preset.schemaVersion != 1) errors += "Unsupported preset schema version"
+        if (preset.schemaVersion !in 1..2) errors += "Unsupported preset schema version"
+        if (TouchPolicy.isTouch(preset)) {
+            if (preset.schemaVersion != 2) errors += "Recorded touches require schema 2"
+            val profiles = TouchPolicy.profiles(preset)
+            if (profiles.isEmpty()) errors += "Touch preset needs a recording or calibration profile"
+            profiles.forEach { errors += TouchPolicy.profileErrors(it) }
+            if (profiles.map { it.packageName }.toSet() != preset.apps.map { it.packageName }.toSet() ||
+                profiles.map { it.packageName }.distinct().size != profiles.size)
+                errors += "Each selected application needs exactly one touch profile"
+            var activeApp: String? = preset.apps.firstOrNull()?.packageName
+            preset.steps.forEach { step ->
+                if (step.kind == ActionKind.LAUNCH_APP) activeApp = step.packageName
+                if (step.kind in setOf(ActionKind.RECORDED_TOUCH, ActionKind.PRESS_BACK) &&
+                    (step.packageName == null || step.packageName != activeApp))
+                    errors += "Touch application transitions require an explicit Launch app step"
+            }
+            if (preset.steps.none { it.kind == ActionKind.RECORDED_TOUCH }) errors += "Record at least one touch gesture"
+            if (preset.steps.any { it.kind !in TouchPolicy.allowed }) errors += "Touch presets contain unsupported semantic actions"
+            if (preset.steps.any { it.packageName != null && preset.apps.none { app -> app.packageName == it.packageName } })
+                errors += "Every recorded touch action must target a selected application"
+            if (preset.steps.sumOf { it.touchStroke?.points?.size ?: 0 } > 20_000) errors += "Touch preset has too many samples"
+        } else if (preset.steps.any { it.kind == ActionKind.RECORDED_TOUCH }) errors += "Recorded touches require Recorded Touches mode"
         if (preset.name.isBlank()) errors += "Preset requires a name"
         if (preset.apps.isEmpty()) errors += "At least one target application is required"
         if (preset.apps.any { it.packageName.isBlank() }) errors += "Target package cannot be blank"
@@ -17,6 +38,7 @@ object PresetValidation {
         if (preset.steps.map { it.id }.distinct().size != preset.steps.size) errors += "Duplicate step IDs"
         preset.steps.forEachIndexed { index, step ->
             val prefix = "Step ${index + 1}"
+            if (step.kind == ActionKind.RECORDED_TOUCH) errors += TouchPolicy.errors(step.touchStroke).map { "$prefix: $it" }
             if (step.label.isBlank()) errors += "$prefix has no label"
             if (step.timeoutMs !in 500L..120_000L) errors += "$prefix has invalid timeout"
             if (step.maxAttempts !in 1..5) errors += "$prefix has invalid retry count"
@@ -42,6 +64,10 @@ object PresetValidation {
     }
 
     fun playbackErrors(preset: Preset): List<String> {
+        // Touches are intentionally unclassified. Actual media counts, not inferred action types,
+        // determine their result. Geometry and path validation still apply in errors().
+        if (TouchPolicy.isTouch(preset)) return preset.steps.filter { it.classificationUncertain }
+            .map { "Uncertain recorded touch: ${it.label}" }
         val issues = mutableListOf<String>()
         val photos = preset.steps.count { it.kind == ActionKind.TAKE_PHOTO }
         val starts = preset.steps.count { it.kind == ActionKind.START_VIDEO }

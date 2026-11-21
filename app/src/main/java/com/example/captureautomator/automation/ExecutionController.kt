@@ -30,6 +30,10 @@ object ExecutionController {
 
     fun run(context: Context, preset: Preset, repository: PresetRepository) {
         if (mutable.value.running || job?.isActive == true || BatchController.state.value.running) return
+        if (TouchCalibration.state.value.running) {
+            mutable.value = ExecutionUiState(error = "Finish or cancel touch calibration first")
+            return
+        }
         if (RecordingSession.state.value?.active == true) {
             mutable.value = ExecutionUiState(error = "Stop recording before starting playback")
             return

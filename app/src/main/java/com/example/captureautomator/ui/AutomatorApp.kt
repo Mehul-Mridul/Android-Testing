@@ -42,6 +42,8 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
     val draft by RecordingSession.state.collectAsState()
     val execution by ExecutionController.state.collectAsState()
     val batch by BatchController.state.collectAsState()
+    val calibration by TouchCalibration.state.collectAsState()
+    val touchStatus by TouchRecorder.status.collectAsState()
     var page by remember { mutableStateOf(Page.HOME) }
     var edit by remember { mutableStateOf<Preset?>(null) }
     var notice by remember { mutableStateOf("") }
@@ -79,6 +81,10 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
         else arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
         permissionLauncher.launch(perms)
     }
+    LaunchedEffect(calibration.message, calibration.savedPresetId) {
+        if (!calibration.running && calibration.message.isNotBlank()) notice = calibration.message
+        if (calibration.savedPresetId != null) { edit = null; page = Page.LIBRARY }
+    }
     LaunchedEffect(draft?.active) {
         if (draft != null && draft?.active == false && page == Page.HOME) page = Page.RECORD
     }
@@ -102,16 +108,16 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
                     Page.CREATE -> CreatePage(
                         activity,
                         onPermission = ::requestPermissions,
-                        onBegin = { name, apps, media ->
+                        onBegin = { name, apps, media, mode ->
                             val service = AutomationAccessibilityService.instance
-                            if (execution.running || batch.running || draft?.active == true)
+                            if (execution.running || batch.running || draft?.active == true || calibration.running)
                                 notice = "Stop the current recording or playback before starting another session"
                             else if (service == null) notice = "Enable the accessibility service in Settings first"
                             else if (!NotificationsAvailable(activity)) {
                                 notice = "Grant notification permission before starting a visible recording"
                                 requestPermissions()
                             } else {
-                                RecordingSession.begin(activity, name, apps, media)
+                                RecordingSession.begin(activity, name, apps, media, mode)
                                 service.showIndicator(true, name)
                                 page = Page.RECORD
                                 if (!AndroidDevice.launch(activity, apps.first().packageName)) {
@@ -147,7 +153,13 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
                         exportLauncher.launch("${row.name.replace(Regex("[^a-zA-Z0-9_-]"), "_")}.json")
                     }, onImport = { importLauncher.launch(arrayOf("application/json", "text/plain", "*/*")) })
                     Page.EDIT -> edit?.let { preset ->
-                        PresetEditor(preset, onSave = { updated ->
+                        PresetEditor(preset, onCalibrate = { candidate ->
+                            val service = AutomationAccessibilityService.instance
+                            if (service == null) notice = "Enable Accessibility before touch calibration"
+                            else if (execution.running || batch.running || draft?.active == true) notice = "Stop the active session before calibration"
+                            else runCatching { TouchCalibration.start(service, candidate, repository) }
+                                .onFailure { notice = it.message.orEmpty() }
+                        }, onSave = { updated ->
                             scope.launch {
                                 runCatching { repository.save(updated) }
                                     .onSuccess {
@@ -226,16 +238,26 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
 }
 
 @Composable private fun CreatePage(activity: MainActivity, onPermission: () -> Unit,
-                                   onBegin: (String, List<AppSpec>, MediaExpectation) -> Unit) {
+                                   onBegin: (String, List<AppSpec>, MediaExpectation, PlaybackMode) -> Unit) {
     var name by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
     var photoCount by remember { mutableStateOf("2") }
     var videoCount by remember { mutableStateOf("1") }
     var durationSeconds by remember { mutableStateOf("5") }
+    var mode by remember { mutableStateOf(PlaybackMode.RECORDED_TOUCHES) }
     val selected = remember { mutableStateListOf<String>() }
     val apps = remember { AndroidDevice.installedLaunchableApps(activity) }
     Column {
         Heading("New recording", "Choose apps explicitly, then perform the actual workflow in the target app.")
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            if (mode == PlaybackMode.RECORDED_TOUCHES) Button(onClick = {}) { Text("Recorded touches") }
+            else OutlinedButton(onClick = { mode = PlaybackMode.RECORDED_TOUCHES }) { Text("Recorded touches") }
+            if (mode == PlaybackMode.SMART_CONTROLS) Button(onClick = {}) { Text("Smart controls") }
+            else OutlinedButton(onClick = { mode = PlaybackMode.SMART_CONTROLS }) { Text("Smart controls") }
+        }
+        Text(if (mode == PlaybackMode.RECORDED_TOUCHES)
+            "Selected apps, one finger. Wait for Ready after each gesture. Next opens the next app; same-app popups stay in the recording. Keyboard and system bars are excluded."
+            else "Use named controls and supported camera state checks.", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Preset name") },
             modifier = Modifier.fillMaxWidth(), singleLine = true)
         Spacer(Modifier.height(6.dp))
@@ -251,10 +273,14 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         LazyColumn(modifier = Modifier.weight(1f)) {
             items(apps.filter { it.displayName.contains(query, true) || it.packageName.contains(query, true) }) { app ->
                 Row(Modifier.fillMaxWidth().clickable {
-                    if (app.packageName in selected) selected.remove(app.packageName) else selected.add(app.packageName)
+                    if (app.packageName in selected) selected.remove(app.packageName) else {
+                        selected.add(app.packageName)
+                    }
                 }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(checked = app.packageName in selected, onCheckedChange = { yes ->
-                        if (yes) { if (app.packageName !in selected) selected.add(app.packageName) }
+                        if (yes) {
+                                if (app.packageName !in selected) selected.add(app.packageName)
+                        }
                         else selected.remove(app.packageName)
                     })
                     Column {
@@ -267,11 +293,11 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         Button(onClick = {
             val chosen = apps.filter { it.packageName in selected }
             onBegin(name, chosen, MediaExpectation(photoCount.toIntOrNull() ?: 2,
-                videoCount.toIntOrNull() ?: 1, (durationSeconds.toLongOrNull() ?: 5L) * 1000))
+                videoCount.toIntOrNull() ?: 1, (durationSeconds.toLongOrNull() ?: 5L) * 1000), mode)
         }, enabled = name.isNotBlank() && selected.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
-            Text("Start recording and open selected app")
+            Text(if (mode == PlaybackMode.RECORDED_TOUCHES) "Start touch recording" else "Start recording and open selected app")
         }
-        Text("When a shutter or save control is not exposed to accessibility, repair that step in the editor.",
+        Text("Wait for Ready after each touch. Include local-save popup responses in your recording.",
             style = MaterialTheme.typography.bodySmall)
     }
 }
@@ -280,12 +306,18 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                                      onStop: () -> Unit, onDiscard: () -> Unit, onReview: () -> Unit) {
     Column {
         Heading(if (draft?.active == true) "Recording session" else "Recording review",
-            "Camera-like custom controls may need assisted editing.")
+            if (draft?.playbackMode == PlaybackMode.RECORDED_TOUCHES) "Recorded touches: paths and timing, no camera-mode inference."
+            else "Camera-like custom controls may need assisted editing.")
         if (draft == null) {
             Text("No active or saved draft.")
             return@Column
         }
         Text(draft.name, fontWeight = FontWeight.Bold)
+        if (draft.playbackMode == PlaybackMode.RECORDED_TOUCHES) {
+            val status by TouchRecorder.status.collectAsState()
+            Text(status, style = MaterialTheme.typography.bodySmall)
+        }
+        draft.recordingIssue?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Text("${draft.steps.size} observed steps · ${draft.apps.joinToString { it.displayName }}")
         if (draft.active) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = onPause) { Text(if (draft.paused) "Resume" else "Pause") }
@@ -344,7 +376,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     }
 }
 
-@Composable private fun PresetEditor(preset: Preset, onSave: (Preset) -> Unit, onCancel: () -> Unit) {
+@Composable private fun PresetEditor(preset: Preset, onSave: (Preset) -> Unit, onCalibrate: (Preset) -> Unit, onCancel: () -> Unit) {
     var current by remember(preset.id) { mutableStateOf(preset) }
     var selectedIndex by remember { mutableStateOf<Int?>(null) }
     var editingName by remember { mutableStateOf(current.name) }
@@ -354,7 +386,23 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     val validation = PresetValidation.errors(current.copy(name = editingName, folder = editingFolder))
     val playbackIssues = PresetValidation.playbackErrors(current)
     Column {
-        Heading("Preset editor", "Use semantic selectors; coordinate fallback requires explicit approval.")
+        Heading("Preset editor", if (TouchPolicy.isTouch(current)) "Recorded touches: calibration is required after changing device or layout."
+            else "Use semantic selectors; coordinate fallback requires explicit approval.")
+        if (TouchPolicy.isTouch(current)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(current.requireTouchStart != false, { current = current.copy(requireTouchStart = it) })
+                Text("Check starting screen for each app", style = MaterialTheme.typography.bodySmall)
+            }
+            Text("Coordinates cannot recognise the starting screen. Prepare the app before immediate replay.", style = MaterialTheme.typography.bodySmall)
+            OutlinedButton(onClick = { onCalibrate(current.copy(name = editingName, folder = editingFolder)) }) {
+                Text("Calibrate touch copy")
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(current.clearRecentsAfterRun == true, { current = current.copy(clearRecentsAfterRun = it) })
+            Text("Clear ALL recent apps after a successful run", style = MaterialTheme.typography.bodySmall)
+        }
+        Text("Uses the visible Recents screen when supported. Does not force-stop apps; skipped on failure or Stop.", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(editingName, { editingName = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(editingFolder, { editingFolder = it }, label = { Text("Folder") }, modifier = Modifier.fillMaxWidth())
         Text("Expected ${current.media.photos} photos, ${current.media.videos} videos of ${current.media.videoDurationMs / 1000}s",
@@ -375,7 +423,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
             OutlinedButton(onClick = { addNew = true }) { Text("Add step") }
             TextButton(onClick = onCancel) { Text("Cancel") }
         }
-        if (current.apps.size == 1 && current.apps.single().packageName == CameraPolicy.PACKAGE) {
+        if (!TouchPolicy.isTouch(current) && current.apps.size == 1 && current.apps.single().packageName == CameraPolicy.PACKAGE) {
             OutlinedButton(onClick = {
                 runCatching { CameraPolicy.repairCopy(current) }.onSuccess(onSave)
                     .onFailure { repairError = it.message.orEmpty() }
@@ -459,6 +507,8 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                     }
                 }
                 OutlinedTextField(packageName, { packageName = it }, label = { Text("Target package") })
+                if (kind == ActionKind.RECORDED_TOUCH) Text("Recorded path: ${step.touchStroke?.points?.size ?: 0} points, ${step.touchStroke?.durationMs ?: 0}ms. Use Calibrate touch copy to move its points.")
+                if (kind != ActionKind.RECORDED_TOUCH) {
                 OutlinedTextField(rid, { rid = it }, label = { Text("Resource ID (highest priority)") })
                 OutlinedTextField(desc, { desc = it }, label = { Text("Content description") })
                 OutlinedTextField(text, { text = it }, label = { Text("Accessible visible text") })
@@ -475,6 +525,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                         OutlinedTextField(ex, { ex = it }, label = { Text("Swipe end X") })
                         OutlinedTextField(ey, { ey = it }, label = { Text("Swipe end Y") })
                     }
+                }
                 }
                 if (kind == ActionKind.ENTER_TEXT) OutlinedTextField(authorizedText, { authorizedText = it },
                     label = { Text("Explicit non-sensitive test string") })

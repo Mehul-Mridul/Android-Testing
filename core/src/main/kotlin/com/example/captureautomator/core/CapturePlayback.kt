@@ -14,7 +14,7 @@ suspend fun runPlaybackStep(
     timing.waitMs(step.interActionDelayMs)
     beforeAttempts()
     val singleAttempt = step.kind in setOf(ActionKind.TAKE_PHOTO, ActionKind.START_VIDEO,
-        ActionKind.STOP_VIDEO, ActionKind.LAUNCH_APP)
+        ActionKind.STOP_VIDEO, ActionKind.LAUNCH_APP, ActionKind.RECORDED_TOUCH, ActionKind.PRESS_BACK)
     val limit = if (singleAttempt) 1 else step.maxAttempts
     var result = false to "Not executed"
     for (attempt in 1..limit) {

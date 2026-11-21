@@ -11,6 +11,7 @@ import com.example.captureautomator.automation.AutomationAccessibilityService
 import com.example.captureautomator.automation.BatchController
 import com.example.captureautomator.automation.ExecutionController
 import com.example.captureautomator.automation.RecordingSession
+import com.example.captureautomator.automation.TouchCalibration
 import com.example.captureautomator.data.PresetRepository
 
 class MainActivity : ComponentActivity() {
@@ -33,7 +34,7 @@ class MainActivity : ComponentActivity() {
                 AutomationAccessibilityService.instance?.clearIndicator()
             }
             "com.example.captureautomator.STOP_EXECUTION" -> {
-                ExecutionController.stop(); BatchController.stop()
+                ExecutionController.stop(); BatchController.stop(); TouchCalibration.cancel(false)
             }
         }
     }

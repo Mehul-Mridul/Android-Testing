@@ -23,7 +23,12 @@ data class RecordingDraft(
     val startedAt: Long,
     val steps: List<AutomationStep> = emptyList(),
     val active: Boolean = true,
-    val paused: Boolean = false
+    val paused: Boolean = false,
+    val playbackMode: PlaybackMode? = PlaybackMode.SMART_CONTROLS,
+    val touchProfile: TouchProfile? = null,
+    val recordingIssue: String? = null,
+    val touchProfiles: List<TouchProfile>? = null,
+    val activeTouchPackage: String? = null
 )
 
 object RecordingSession {
@@ -38,7 +43,8 @@ object RecordingSession {
     private val observeScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var observeJob: Job? = null
 
-    fun begin(context: Context, name: String, apps: List<AppSpec>, media: MediaExpectation) {
+    fun begin(context: Context, name: String, apps: List<AppSpec>, media: MediaExpectation,
+              mode: PlaybackMode = PlaybackMode.SMART_CONTROLS) {
         require(name.isNotBlank() && apps.isNotEmpty())
         check(mutable.value?.active != true) { "Another recording is active" }
         lastEventAt = 0L
@@ -48,9 +54,13 @@ object RecordingSession {
         mutable.value = RecordingDraft(name, apps, AndroidDevice.profile(context), media,
             System.currentTimeMillis(), steps = listOf(AutomationStep(
                 label = "Launch ${apps.first().displayName}", kind = ActionKind.LAUNCH_APP,
-                packageName = apps.first().packageName)))
+                packageName = apps.first().packageName)), playbackMode = mode, activeTouchPackage = apps.first().packageName)
         persist(context)
         observeJob?.cancel()
+        if (mode == PlaybackMode.RECORDED_TOUCHES) {
+            TouchRecorder.start(checkNotNull(AutomationAccessibilityService.instance))
+            return
+        }
         observeJob = observeScope.launch {
             while (mutable.value?.active == true) {
                 val current = mutable.value
@@ -82,9 +92,54 @@ object RecordingSession {
     }
 
     fun pause(context: Context) { mutable.value?.let { mutable.value = it.copy(paused = true) }; persist(context) }
-    fun resume(context: Context) { cameraTracker = CameraRecordingTracker(); mutable.value?.let { mutable.value = it.copy(paused = false) }; persist(context) }
-    fun stop(context: Context) { observeJob?.cancel(); mutable.value?.let { mutable.value = it.copy(active = false, paused = false) }; persist(context) }
-    fun discard(context: Context) { observeJob?.cancel(); mutable.value = null; persist(context) }
+    fun resume(context: Context) { cameraTracker = CameraRecordingTracker(); TouchRecorder.resetDelay(); mutable.value?.let { mutable.value = it.copy(paused = false) }; persist(context) }
+    fun stop(context: Context) { observeJob?.cancel(); mutable.value?.let { mutable.value = it.copy(active = false, paused = false) }; TouchRecorder.stop(); persist(context) }
+    fun discard(context: Context) { observeJob?.cancel(); TouchRecorder.stop(); mutable.value = null; persist(context) }
+
+    fun touchProfile(context: Context, profile: TouchProfile) {
+        val draft = mutable.value ?: return
+        if (!draft.active || draft.playbackMode != PlaybackMode.RECORDED_TOUCHES ||
+            draft.apps.none { it.packageName == profile.packageName }) return
+        val profiles = draft.touchProfiles ?: listOfNotNull(draft.touchProfile)
+        val updated = if (profiles.none { it.packageName == profile.packageName }) profiles + profile else profiles
+        val previous = draft.activeTouchPackage ?: draft.apps.first().packageName
+        val transition = if (previous != profile.packageName) listOf(AutomationStep(
+            label = "Launch ${draft.apps.first { it.packageName == profile.packageName }.displayName}",
+            kind = ActionKind.LAUNCH_APP, packageName = profile.packageName, maxAttempts = 1)) else emptyList()
+        mutable.value = draft.copy(touchProfile = draft.touchProfile ?: profile, touchProfiles = updated,
+            activeTouchPackage = profile.packageName, steps = draft.steps + transition)
+        if (previous != profile.packageName || updated != profiles) persist(context)
+    }
+    fun recordTouch(context: Context, stroke: TouchStroke, delayMs: Long): String? {
+        val draft = mutable.value ?: return null
+        if (!draft.active || draft.paused || draft.playbackMode != PlaybackMode.RECORDED_TOUCHES) return null
+        if (draft.steps.size >= 1000 || draft.steps.sumOf { it.touchStroke?.points?.size ?: 0 } + stroke.points.size > 20_000) {
+            stopWithIssue(context, "Touch recording reached its step/sample limit; this gesture was not forwarded")
+            return null
+        }
+        val step = AutomationStep(label = if (stroke.points.size > 1) "Recorded swipe" else if (stroke.durationMs >= 500) "Recorded hold" else "Recorded tap",
+            kind = ActionKind.RECORDED_TOUCH, packageName = draft.activeTouchPackage ?: draft.apps.first().packageName,
+            touchStroke = stroke, maxAttempts = 1, interActionDelayMs = delayMs,
+            capturedAtEpochMs = System.currentTimeMillis(), needsReview = true)
+        addStep(context, step)
+        return step.id
+    }
+    fun touchCompleted(context: Context, id: String, completed: Boolean) {
+        mutable.value?.let { draft -> mutable.value = draft.copy(steps = draft.steps.map {
+            if (it.id == id) it.copy(needsReview = !completed) else it
+        }) }
+        persist(context)
+    }
+    fun recordTouchBack(context: Context, delayMs: Long) {
+        val draft = mutable.value ?: return
+        if (draft.active && !draft.paused) addStep(context, AutomationStep(label = "Recorded Back",
+            kind = ActionKind.PRESS_BACK, packageName = draft.activeTouchPackage ?: draft.apps.first().packageName,
+            maxAttempts = 1, interActionDelayMs = delayMs))
+    }
+    fun stopWithIssue(context: Context, issue: String) {
+        mutable.value?.let { mutable.value = it.copy(recordingIssue = issue) }
+        stop(context)
+    }
 
     /** If process death occurred, the draft can be reviewed but NEVER resumes monitoring itself. */
     fun recover(context: Context) {
@@ -102,9 +157,12 @@ object RecordingSession {
     }
 
     fun toPreset(): Preset? = mutable.value?.takeIf { !it.active }?.let { draft ->
-        Preset(name = draft.name, apps = draft.apps, recordedDevice = draft.device,
+        Preset(schemaVersion = if (draft.playbackMode == PlaybackMode.RECORDED_TOUCHES) 2 else 1,
+            name = draft.name, apps = draft.apps, recordedDevice = draft.device,
             media = draft.media, steps = draft.steps + AutomationStep(label = "Verify captured media",
-                kind = ActionKind.VERIFY_MEDIA), createdAtEpochMs = draft.startedAt)
+                kind = ActionKind.VERIFY_MEDIA, packageName = draft.apps.first().packageName), createdAtEpochMs = draft.startedAt,
+            playbackMode = draft.playbackMode ?: PlaybackMode.SMART_CONTROLS, touchProfile = draft.touchProfile,
+            touchProfiles = draft.touchProfiles ?: listOfNotNull(draft.touchProfile))
     }
 
     private fun persist(context: Context) {
@@ -126,6 +184,7 @@ object RecordingSession {
     fun onEvent(context: Context, event: AccessibilityEvent, appRoot: AccessibilityNodeInfo?) {
         val draft = mutable.value ?: return
         if (!draft.active || draft.paused) return
+        if (draft.playbackMode == PlaybackMode.RECORDED_TOUCHES) return // Overlay coordinates only; no semantic/text collection.
         val pkg = event.packageName?.toString() ?: return
         if (draft.apps.none { it.packageName == pkg }) return
         if (pkg == context.packageName) return

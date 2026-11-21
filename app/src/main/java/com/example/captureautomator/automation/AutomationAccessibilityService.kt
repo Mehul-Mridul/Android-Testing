@@ -18,6 +18,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.core.app.NotificationCompat
 import com.example.captureautomator.ui.MainActivity
+import com.example.captureautomator.core.PlaybackMode
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
@@ -47,13 +48,19 @@ class AutomationAccessibilityService : AccessibilityService() {
         if (event == null) return
         val draft = RecordingSession.state.value ?: return
         if (!draft.active || draft.paused || draft.apps.none { it.packageName == event.packageName?.toString() }) return
+        if (draft.playbackMode == PlaybackMode.RECORDED_TOUCHES) return
         try { RecordingSession.onEvent(this, event, rootInActiveWindow) } catch (_: Exception) {
             // Third-party accessibility hierarchies may contain invalid/stale nodes.
         }
     }
 
-    override fun onInterrupt() { }
+    override fun onInterrupt() {
+        if (RecordingSession.state.value?.active == true) RecordingSession.stop(this)
+        TouchRecorder.stop(); TouchCalibration.cancel(false); TouchStartGate.cancel()
+        ExecutionController.stop(); BatchController.stop()
+    }
     override fun onDestroy() {
+        onInterrupt()
         clearIndicator()
         instance = null
         super.onDestroy()

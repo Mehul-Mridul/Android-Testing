@@ -21,6 +21,7 @@ class ExecutionEngine(
     private val ui = UiResolver(service, timing)
     private val camera = CameraUi(service, timing)
     private var lastMediaScan: MediaResult? = null
+    private val touchStartAccepted = mutableSetOf<String>()
     private val runId = UUID.randomUUID().toString()
     private val runStarted = SystemClock.elapsedRealtime()
     private val events = mutableListOf<RunEvent>()
@@ -64,6 +65,14 @@ class ExecutionEngine(
                     MediaResult(issues = listOf("Missing installed app: ${app.packageName}")), 0, "Preflight")
             }
         }
+        if (TouchPolicy.isTouch(preset)) {
+            for (binding in TouchPolicy.profiles(preset)) {
+            if (binding.model != android.os.Build.MODEL || binding.manufacturer != android.os.Build.MANUFACTURER ||
+                binding.appVersion != AndroidDevice.version(context, binding.packageName))
+                return report(preset, startedAt, Outcome.FAIL, stepResults, MediaResult(issues = listOf(
+                    "Different device or app version; use Calibrate touch copy before replay")), 0, "Touch compatibility preflight")
+            }
+        }
         gate()
         val baseline = verifier.baseline()
         event("BASELINE", values = mapOf("ids" to baseline.ids.size.toString(),
@@ -90,7 +99,7 @@ class ExecutionEngine(
                 val began = SystemClock.elapsedRealtime()
                 event("STEP_STARTED", step, values = mapOf("kind" to step.kind.name,
                     "recordedDelayMs" to step.interActionDelayMs.toString()))
-                val capture = step.kind in setOf(ActionKind.TAKE_PHOTO, ActionKind.START_VIDEO, ActionKind.STOP_VIDEO)
+                val capture = step.kind in setOf(ActionKind.TAKE_PHOTO, ActionKind.START_VIDEO, ActionKind.STOP_VIDEO, ActionKind.RECORDED_TOUCH)
                 if (step.kind == ActionKind.STOP_VIDEO && startedVideoAtElapsedMs == null) {
                     stepResults += StepResult(step.id, step.label, false,
                         "No preceding START_VIDEO gesture completed", 0)
@@ -118,7 +127,8 @@ class ExecutionEngine(
                             "status" to if (capture) actionResult.second.substringBefore(':') else step.kind.name))
                     actionResult
                 }
-                event("CAMERA_STATE", step, values = CameraUi.observe(service.currentRoot()).evidence + ("observed" to camera.state().name))
+                if (!TouchPolicy.isTouch(preset)) event("CAMERA_STATE", step,
+                    values = CameraUi.observe(service.currentRoot()).evidence + ("observed" to camera.state().name))
                 if (result.first && step.kind == ActionKind.START_VIDEO)
                     startedVideoAtElapsedMs = camera.recordingStartedAtElapsedMs ?: SystemClock.elapsedRealtime()
                 if (result.first && step.kind == ActionKind.STOP_VIDEO)
@@ -144,15 +154,24 @@ class ExecutionEngine(
             // An explicit verification is authoritative; otherwise verify even after a failed gesture.
             if (media == null) media = verifyMedia(baseline, preset, startedAt)
         } catch (_: CancellationException) {
-            event("RUN_CANCELLED", values = mapOf("videoMayStillBeRecording" to (startedVideoAtElapsedMs != null).toString()))
+            event("RUN_CANCELLED", values = mapOf("videoMayStillBeRecording" to if (TouchPolicy.isTouch(preset)) "unknown-touch-replay" else (startedVideoAtElapsedMs != null).toString()))
             return report(preset, startedAt, Outcome.CANCELLED, stepResults,
                 media ?: lastMediaScan?.copy(verificationComplete = false, issues = lastMediaScan!!.issues + "Verification interrupted by tester") ?: MediaResult(issues = listOf("Stopped by tester; no further gestures. Check Camera manually if video may be recording.")),
                 0, "Cancelled; capture state may be uncertain")
         }
         val verdict = Verdict.outcome(stepResults, media, preset.media)
         val outcome = if (stepResults.size != preset.steps.size && verdict == Outcome.PASS) Outcome.FAIL else verdict
+        var cleanup = ""
+        if (preset.clearRecentsAfterRun == true) {
+            cleanup = if (outcome == Outcome.PASS) {
+                try { RecentAppsCleanup.clear(service, timing) }
+                catch (_: CancellationException) { "RECENTS_CANCELLED: no further cleanup actions" }
+                catch (_: Exception) { "RECENTS_UNAVAILABLE: close recent apps manually" }
+            } else "RECENTS_SKIPPED: run did not pass; inspect the app before closing it"
+            event("RECENTS_CLEANUP", values = mapOf("status" to cleanup.substringBefore(':')))
+        }
         return report(preset, startedAt, outcome, stepResults, media, 0,
-            mismatches.joinToString("; "))
+            (mismatches + cleanup).filter { it.isNotBlank() }.joinToString("; "))
     }
 
     private fun report(preset: Preset, started: Long, outcome: Outcome, steps: List<StepResult>,
@@ -179,6 +198,34 @@ class ExecutionEngine(
         event("MEDIA_VERIFICATION_FINISHED", values = mapOf("photos" to result.photosFound.toString(),
             "videos" to result.videosFound.toString(), "complete" to result.verificationComplete.toString()))
         return result
+    }
+
+    private suspend fun prepareTouch(preset: Preset, pkg: String?, timeoutMs: Long): Pair<TouchProfile?, String> {
+        val binding = TouchPolicy.profile(preset, pkg) ?: return null to "TOUCH_PROFILE_MISSING"
+        var current: TouchProfile? = null
+        var stable = false
+        val deadline = SystemClock.elapsedRealtime() + timeoutMs
+        while (SystemClock.elapsedRealtime() < deadline) {
+            gate()
+            val frame = TouchEnvironment.current(service, binding.packageName)
+            if (frame != null && frame == current) { stable = true; break }
+            current = frame
+            timing.waitMs(120)
+        }
+        if (!stable || current == null) return null to "TOUCH_NOT_READY: selected app must be foreground; keyboard/editable fields and system UI are excluded"
+        val errors = TouchPolicy.compatibility(binding, current)
+        if (errors.isNotEmpty()) return null to "TOUCH_INCOMPATIBLE: ${errors.joinToString("; ")}"
+        if (binding.packageName !in touchStartAccepted && preset.requireTouchStart != false) {
+            event("TOUCH_START_CHECKPOINT")
+            if (!TouchStartGate.await(service, binding)) return null to "TOUCH_START_TIMEOUT: no gesture sent"
+            gate()
+            touchStartAccepted += binding.packageName
+            timing.waitMs(120) // Let the checkpoint overlay leave the input window list before injection.
+        }
+        val fresh = TouchEnvironment.current(service, binding.packageName)
+        if (fresh == null || TouchPolicy.compatibility(binding, fresh).isNotEmpty())
+            return null to "TOUCH_WINDOW_CHANGED: no gesture sent"
+        return fresh to "Touch geometry confirmed"
     }
 
     private fun forbiddenPublication(step: AutomationStep): Boolean {
@@ -210,6 +257,19 @@ class ExecutionEngine(
             return false to "Wrong foreground app; expected $pkg, saw ${service.activePackage()}"
         }
         return when (step.kind) {
+            ActionKind.RECORDED_TOUCH -> {
+                val prepared = prepareTouch(preset, pkg, step.timeoutMs)
+                val frame = prepared.first
+                if (frame == null) false to prepared.second else {
+                    val stroke = checkNotNull(step.touchStroke)
+                    event("TOUCH_REPLAY", step, values = mapOf("points" to stroke.points.size.toString(),
+                        "durationMs" to stroke.durationMs.toString()))
+                    ui.replayTouch(stroke, frame, ready = {
+                        val current = TouchEnvironment.current(service, frame.packageName)
+                        current != null && TouchPolicy.compatibility(frame, current).isEmpty()
+                    })
+                }
+            }
             ActionKind.TAKE_PHOTO, ActionKind.START_VIDEO, ActionKind.STOP_VIDEO -> {
                 if (pkg == null) false to "No target package"
                 else if (pkg == CameraPolicy.PACKAGE) camera.capture(step.kind, step.timeoutMs, preset.media.videoDurationMs)
@@ -230,7 +290,11 @@ class ExecutionEngine(
             ActionKind.SCROLL -> ui.scroll(step.locator) to "Scroll accessible scroll container"
             ActionKind.SWIPE -> ui.swipe(step.locator, step.gestureDurationMs) to "Approved normalized swipe"
             ActionKind.ENTER_TEXT -> ui.enterText(step.locator, step.authorizedTestText) to "Set explicit test data (not logged)"
-            ActionKind.PRESS_BACK -> service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) to "Back"
+            ActionKind.PRESS_BACK -> {
+                if (TouchPolicy.isTouch(preset) && prepareTouch(preset, pkg, step.timeoutMs).first == null)
+                    false to "TOUCH_BACK_BLOCKED: foreground/geometry not ready"
+                else service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) to "Back"
+            }
             ActionKind.PRESS_HOME -> service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_HOME) to "Home"
             ActionKind.WAIT_FOR_ELEMENT -> ui.waitForElement(step.locator, true, step.timeoutMs) to "Wait for element"
             ActionKind.WAIT_FOR_ELEMENT_GONE -> ui.waitForElement(step.locator, false, step.timeoutMs) to "Wait for element to disappear"
