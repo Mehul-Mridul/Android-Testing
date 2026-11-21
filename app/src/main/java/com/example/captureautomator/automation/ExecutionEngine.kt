@@ -37,6 +37,18 @@ class ExecutionEngine(
     suspend fun execute(preset: Preset, resumeIndex: Int = 0): ExecutionReport {
         val startedAt = System.currentTimeMillis()
         event("RUN_STARTED", values = mapOf("presetId" to preset.id))
+        return try {
+            executeRun(preset, resumeIndex, startedAt)
+        } catch (_: CancellationException) {
+            // Also correlate cancellation during preflight/baseline, before the step loop exists.
+            event("RUN_CANCELLED", values = mapOf("phase" to "preflight"))
+            report(preset, startedAt, Outcome.CANCELLED, emptyList(),
+                MediaResult(issues = listOf("Stopped during preflight; no capture action executed")),
+                resumeIndex, "Cancelled before playback")
+        }
+    }
+
+    private suspend fun executeRun(preset: Preset, resumeIndex: Int, startedAt: Long): ExecutionReport {
         val stepResults = mutableListOf<StepResult>()
         val violations = PresetValidation.canExecute(preset)
         if (violations.isNotEmpty()) return report(preset, startedAt, Outcome.FAIL, stepResults,
