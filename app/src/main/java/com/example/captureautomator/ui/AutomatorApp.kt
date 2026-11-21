@@ -104,7 +104,9 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
                         onPermission = ::requestPermissions,
                         onBegin = { name, apps, media ->
                             val service = AutomationAccessibilityService.instance
-                            if (service == null) notice = "Enable the accessibility service in Settings first"
+                            if (execution.running || batch.running || draft?.active == true)
+                                notice = "Stop the current recording or playback before starting another session"
+                            else if (service == null) notice = "Enable the accessibility service in Settings first"
                             else if (!NotificationsAvailable(activity)) {
                                 notice = "Grant notification permission before starting a visible recording"
                                 requestPermissions()

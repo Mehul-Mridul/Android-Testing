@@ -28,7 +28,7 @@ object BatchController {
     private var paused = false
 
     fun run(context: Context, presets: List<Preset>, repository: PresetRepository, stopOnFail: Boolean) {
-        if (job?.isActive == true || ExecutionController.state.value.running ||
+        if (mutable.value.running || job?.isActive == true || ExecutionController.state.value.running ||
             RecordingSession.state.value?.active == true) return
         val service = AutomationAccessibilityService.instance
         if (service == null || presets.isEmpty()) {

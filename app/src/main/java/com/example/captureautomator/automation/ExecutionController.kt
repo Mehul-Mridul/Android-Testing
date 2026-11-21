@@ -29,7 +29,7 @@ object ExecutionController {
     private var isPaused = false
 
     fun run(context: Context, preset: Preset, repository: PresetRepository) {
-        if (job?.isActive == true || BatchController.state.value.running) return
+        if (mutable.value.running || job?.isActive == true || BatchController.state.value.running) return
         if (RecordingSession.state.value?.active == true) {
             mutable.value = ExecutionUiState(error = "Stop recording before starting playback")
             return
