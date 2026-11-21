@@ -13,12 +13,14 @@ object PresetValidation {
             errors += "END_RUN may only be the final step"
         if (preset.media.photos < 0 || preset.media.videos < 0) errors += "Negative media counts are invalid"
         if (preset.media.videoDurationMs < 0) errors += "Negative video duration is invalid"
+        if (preset.media.durationToleranceMs < 0) errors += "Negative duration tolerance is invalid"
         if (preset.steps.map { it.id }.distinct().size != preset.steps.size) errors += "Duplicate step IDs"
         preset.steps.forEachIndexed { index, step ->
             val prefix = "Step ${index + 1}"
             if (step.label.isBlank()) errors += "$prefix has no label"
             if (step.timeoutMs !in 500L..120_000L) errors += "$prefix has invalid timeout"
             if (step.maxAttempts !in 1..5) errors += "$prefix has invalid retry count"
+            if (step.interActionDelayMs !in 0L..300_000L) errors += "$prefix has invalid recorded delay (0–300000ms)"
             if (step.kind == ActionKind.WAIT_MS && step.waitMs !in 0L..300_000L) errors += "$prefix has invalid wait"
             if (step.kind == ActionKind.ENTER_TEXT && step.authorizedTestText.isNullOrBlank())
                 errors += "$prefix needs explicit tester-supplied text"
@@ -39,7 +41,40 @@ object PresetValidation {
         return errors
     }
 
-    fun canExecute(preset: Preset): List<String> = errors(preset) +
+    fun playbackErrors(preset: Preset): List<String> {
+        val issues = mutableListOf<String>()
+        val photos = preset.steps.count { it.kind == ActionKind.TAKE_PHOTO }
+        val starts = preset.steps.count { it.kind == ActionKind.START_VIDEO }
+        val stops = preset.steps.count { it.kind == ActionKind.STOP_VIDEO }
+        if (photos != preset.media.photos || starts != preset.media.videos || stops != preset.media.videos)
+            issues += "Capture/count mismatch: workflow has $photos photo, $starts video-start, $stops video-stop actions; expected ${preset.media.photos} photos and ${preset.media.videos} videos. Review generic taps; do not infer captures."
+        var recordingPackage: String? = null
+        for ((index, step) in preset.steps.withIndex()) {
+            val pkg = step.packageName ?: preset.apps.firstOrNull()?.packageName.orEmpty()
+            when (step.kind) {
+                ActionKind.START_VIDEO -> {
+                    if (recordingPackage != null) issues += "Step ${index + 1}: nested START_VIDEO"
+                    recordingPackage = pkg
+                }
+                ActionKind.STOP_VIDEO -> {
+                    if (recordingPackage == null) issues += "Step ${index + 1}: STOP_VIDEO without START_VIDEO"
+                    else if (recordingPackage != pkg) issues += "Step ${index + 1}: video start/stop target differs"
+                    recordingPackage = null
+                }
+                ActionKind.TAKE_PHOTO, ActionKind.VERIFY_MEDIA, ActionKind.END_RUN ->
+                    if (recordingPackage != null) issues += "Step ${index + 1}: ${step.kind} while video may be recording"
+                else -> Unit
+            }
+            if (step.classificationUncertain) issues += "Step ${index + 1}: uncertain capture classification; review action kind"
+        }
+        if (recordingPackage != null) issues += "Unclosed START_VIDEO: explicit STOP_VIDEO required"
+        val lastCapture = preset.steps.indexOfLast { it.kind in setOf(ActionKind.TAKE_PHOTO, ActionKind.STOP_VIDEO) }
+        if (preset.steps.withIndex().any { it.value.kind == ActionKind.VERIFY_MEDIA && it.index < lastCapture })
+            issues += "VERIFY_MEDIA must follow all capture actions"
+        return issues
+    }
+
+    fun canExecute(preset: Preset): List<String> = errors(preset) + playbackErrors(preset) +
         preset.steps.filter { it.needsReview }.map { "Unreviewed step: ${it.label}" }
 }
 

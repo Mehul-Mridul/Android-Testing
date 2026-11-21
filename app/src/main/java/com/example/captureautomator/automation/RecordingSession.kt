@@ -145,6 +145,9 @@ object RecordingSession {
         if (action == ActionKind.ENTER_TEXT && draft.steps.lastOrNull()?.kind == ActionKind.ENTER_TEXT &&
             draft.steps.lastOrNull()?.locator?.resourceId == locator.resourceId) return
         if (action == ActionKind.TAP && delta < 170 && draft.steps.lastOrNull()?.locator == locator) return
+        val classificationUncertain = action in setOf(ActionKind.TAKE_PHOTO, ActionKind.START_VIDEO, ActionKind.STOP_VIDEO) ||
+            (action in setOf(ActionKind.TAP, ActionKind.LONG_PRESS) &&
+                Regex("(?i)(shutter|capture|record|video|photo|camera)").containsMatchIn(identifier))
         lastEventAt = now
         addStep(context, AutomationStep(label = when (action) {
             ActionKind.ENTER_TEXT -> "Enter authorized test data ($identifier)"
@@ -155,8 +158,8 @@ object RecordingSession {
             ActionKind.STOP_VIDEO -> "Stop video ($identifier)"
             else -> "Tap $identifier"
         }, kind = action, packageName = pkg, locator = locator, capturedAtEpochMs = now,
-            interActionDelayMs = delta,
-            needsReview = action == ActionKind.ENTER_TEXT ||
+            interActionDelayMs = delta, classificationUncertain = classificationUncertain,
+            needsReview = classificationUncertain || action == ActionKind.ENTER_TEXT ||
                 (locator.resourceId == null && locator.contentDescription == null && locator.text == null)))
     }
 

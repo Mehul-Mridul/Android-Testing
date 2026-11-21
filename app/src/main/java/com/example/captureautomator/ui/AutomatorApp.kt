@@ -349,12 +349,22 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     var editingFolder by remember { mutableStateOf(current.folder) }
     var addNew by remember { mutableStateOf(false) }
     val validation = PresetValidation.errors(current.copy(name = editingName, folder = editingFolder))
+    val playbackIssues = PresetValidation.playbackErrors(current)
     Column {
         Heading("Preset editor", "Use semantic selectors; coordinate fallback requires explicit approval.")
         OutlinedTextField(editingName, { editingName = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(editingFolder, { editingFolder = it }, label = { Text("Folder") }, modifier = Modifier.fillMaxWidth())
         Text("Expected ${current.media.photos} photos, ${current.media.videos} videos of ${current.media.videoDurationMs / 1000}s",
             style = MaterialTheme.typography.bodySmall)
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            OutlinedTextField(current.media.photos.toString(), { value -> value.toIntOrNull()?.let {
+                current = current.copy(media = current.media.copy(photos = it))
+            } }, label = { Text("Photos") }, modifier = Modifier.weight(1f))
+            OutlinedTextField(current.media.videos.toString(), { value -> value.toIntOrNull()?.let {
+                current = current.copy(media = current.media.copy(videos = it))
+            } }, label = { Text("Videos") }, modifier = Modifier.weight(1f))
+        }
+        if (playbackIssues.isNotEmpty()) Text("Playback blocked: ${playbackIssues.first()}", color = MaterialTheme.colorScheme.error)
         if (validation.isNotEmpty()) Text("Validation: ${validation.first()}", color = MaterialTheme.colorScheme.error)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { onSave(current.copy(name = editingName, folder = editingFolder,
@@ -420,6 +430,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     var useCoords by remember(step.id) { mutableStateOf(step.locator?.allowCoordinateFallback ?: false) }
     var waitMs by remember(step.id) { mutableStateOf(step.waitMs.toString()) }
     var timeoutMs by remember(step.id) { mutableStateOf(step.timeoutMs.toString()) }
+    var recordedDelay by remember(step.id) { mutableStateOf(step.interActionDelayMs.toString()) }
     var attempts by remember(step.id) { mutableStateOf(step.maxAttempts.toString()) }
     var authorizedText by remember(step.id) { mutableStateOf(step.authorizedTestText.orEmpty()) }
     var expanded by remember { mutableStateOf(false) }
@@ -456,6 +467,8 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 }
                 if (kind == ActionKind.ENTER_TEXT) OutlinedTextField(authorizedText, { authorizedText = it },
                     label = { Text("Explicit non-sensitive test string") })
+                Text("Apply confirms the selected action kind. A video gesture does not prove recording started.")
+                OutlinedTextField(recordedDelay, { recordedDelay = it }, label = { Text("Recorded pre-action delay (ms)") })
                 OutlinedTextField(waitMs, { waitMs = it }, label = { Text("Wait milliseconds") })
                 OutlinedTextField(timeoutMs, { timeoutMs = it }, label = { Text("Timeout milliseconds") })
                 OutlinedTextField(attempts, { attempts = it }, label = { Text("Max attempts") })
@@ -475,7 +488,8 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 timeoutMs = timeoutMs.toLongOrNull() ?: 8000,
                 maxAttempts = attempts.toIntOrNull() ?: 2,
                 authorizedTestText = authorizedText.ifBlank { null },
-                needsReview = requiresLocator && !identified))
+                interActionDelayMs = recordedDelay.toLongOrNull() ?: -1,
+                classificationUncertain = false, needsReview = requiresLocator && !identified))
         }) { Text("Apply") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
@@ -502,6 +516,8 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 Text("${report.device.manufacturer} ${report.device.model} | Android API ${report.device.androidSdk}")
                 Text("Media: ${report.media.photosFound} photos, ${report.media.videosFound} videos")
                 Text("Verified: ${report.media.verificationComplete}")
+                Text("Run ID: ${report.id}")
+                Text("Gesture completion does not confirm capture. Media evidence is listed separately.")
                 report.media.issues.forEach { Text("Issue: $it") }
                 report.media.mediaEvidence.forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
                 if (report.notes.isNotBlank()) Text(report.notes)

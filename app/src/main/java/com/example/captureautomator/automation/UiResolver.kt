@@ -10,13 +10,16 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.example.captureautomator.core.UiLocator
 import com.example.captureautomator.core.UiCandidate
 import com.example.captureautomator.core.SelectorPolicy
+import com.example.captureautomator.core.PlaybackTiming
+import com.example.captureautomator.core.captureOnce
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.math.abs
 
 /** Fail-closed semantic matching. Coordinates are NEVER used without explicit preset opt-in. */
-class UiResolver(private val service: AutomationAccessibilityService) {
+class UiResolver(private val service: AutomationAccessibilityService,
+                 private val timing: PlaybackTiming = PlaybackTiming { }) {
     data class Match(val node: AccessibilityNodeInfo, val confidence: Float, val reason: String)
 
     fun resolve(locator: UiLocator?): Match? {
@@ -68,30 +71,49 @@ class UiResolver(private val service: AutomationAccessibilityService) {
     }
 
     suspend fun waitForElement(locator: UiLocator?, appears: Boolean, timeoutMs: Long): Boolean {
-        val started = android.os.SystemClock.elapsedRealtime()
-        while (android.os.SystemClock.elapsedRealtime() - started < timeoutMs) {
-            if (visibleElement(locator) == appears) return true
-            delay(180)
-        }
-        return false
+        return timing.poll(timeoutMs) { visibleElement(locator) == appears }
     }
 
     suspend fun waitForApp(packageName: String, timeoutMs: Long): Boolean {
-        val started = android.os.SystemClock.elapsedRealtime()
-        while (android.os.SystemClock.elapsedRealtime() - started < timeoutMs) {
-            if (service.activePackage() == packageName) return true
-            delay(180)
+        var stable = 0
+        return timing.poll(timeoutMs) {
+            val root = service.currentRoot()
+            val bounds = Rect().also { root?.getBoundsInScreen(it) }
+            val ready = service.activePackage() == packageName &&
+                root?.packageName?.toString() == packageName && root.isVisibleToUser &&
+                root.isEnabled && !bounds.isEmpty && root.childCount > 0
+            stable = if (ready) stable + 1 else 0
+            stable >= 2
         }
-        return false
     }
 
     suspend fun waitForScreenChange(before: String, timeoutMs: Long): Boolean {
-        val started = android.os.SystemClock.elapsedRealtime()
-        while (android.os.SystemClock.elapsedRealtime() - started < timeoutMs) {
-            if (activeFingerprint() != before) return true
-            delay(180)
+        return timing.poll(timeoutMs) { activeFingerprint() != before }
+    }
+
+    /** Readiness probes never click. Resolve again after the final pause gate, then send one stroke.
+     * Capture never tries ACTION_CLICK followed by a gesture: a false return can still be ambiguous.
+     */
+    suspend fun capture(locator: UiLocator?, packageName: String, timeoutMs: Long): Pair<Boolean, String> {
+        fun ready(): Match? {
+            if (service.activePackage() != packageName) return null
+            val match = resolve(locator) ?: return null
+            val node = match.node
+            val bounds = Rect().also { node.getBoundsInScreen(it) }
+            val window = service.currentWindowBounds()
+            return match.takeIf { node.packageName?.toString() == packageName &&
+                node.isVisibleToUser && node.isEnabled && !bounds.isEmpty &&
+                window.contains(bounds) }
         }
-        return false
+        val result = captureOnce(timing, timeoutMs, ::ready,
+            signature = { match -> Rect().also(match.node::getBoundsInScreen).toShortString() },
+            dispatch = { match ->
+                val bounds = Rect().also(match.node::getBoundsInScreen)
+                gesture(bounds.centerX().toFloat(), bounds.centerY().toFloat(),
+                    bounds.centerX().toFloat(), bounds.centerY().toFloat(), 80)
+            })
+        return result.gestureCompleted to "${result.status}: gestureAttempted=${result.gestureAttempted}; " +
+            "camera acceptance/save unconfirmed until MediaStore verification; no capture retry"
     }
 
     suspend fun tap(locator: UiLocator?, kind: String, durationMs: Long): Pair<Boolean, String> {

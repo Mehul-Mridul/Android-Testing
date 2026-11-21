@@ -53,7 +53,9 @@ data class AutomationStep(
     val authorizedTestText: String? = null,
     val needsReview: Boolean = false,
     val capturedAtEpochMs: Long? = null,
-    val interActionDelayMs: Long = 0
+    val interActionDelayMs: Long = 0,
+    /** Heuristic recording classification must be explicitly reviewed before playback. */
+    val classificationUncertain: Boolean = false
 )
 
 data class MediaExpectation(
@@ -107,5 +109,16 @@ data class ExecutionReport(
     val results: List<StepResult>,
     val media: MediaResult,
     val resumedFromStep: Int = 0,
-    val notes: String = ""
+    val notes: String = "",
+    val diagnostics: List<RunEvent> = emptyList()
+)
+
+/** Whitelisted machine-readable diagnostics; no selectors, screen text, or entered text. */
+data class RunEvent(
+    val runId: String,
+    val elapsedMs: Long,
+    val event: String,
+    val stepId: String? = null,
+    val attempt: Int? = null,
+    val values: Map<String, String> = emptyMap()
 )

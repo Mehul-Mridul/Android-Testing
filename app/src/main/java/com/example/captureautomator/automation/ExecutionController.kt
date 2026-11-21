@@ -29,7 +29,7 @@ object ExecutionController {
     private var isPaused = false
 
     fun run(context: Context, preset: Preset, repository: PresetRepository) {
-        if (job?.isActive == true) return
+        if (job?.isActive == true || BatchController.state.value.running) return
         if (RecordingSession.state.value?.active == true) {
             mutable.value = ExecutionUiState(error = "Stop recording before starting playback")
             return
@@ -59,7 +59,7 @@ object ExecutionController {
                         }
                     })
                 val report = engine.execute(preset)
-                repository.saveReport(report)
+                withContext(NonCancellable) { repository.saveReport(report) }
                 mutable.value = mutable.value.copy(running = false, paused = false,
                     report = report, completed = report.results)
             } catch (_: CancellationException) {

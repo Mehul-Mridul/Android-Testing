@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "id": "iqoo-one-photo-smoke-review-required",
+  "name": "iQOO Camera - ONE PHOTO smoke (review shutter)",
+  "description": "Separate calibration preset. In Camera select Photo mode manually, dismiss prompts and verify shutter selector. Expected one photo and zero videos. Not device verified.",
+  "folder": "Smoke tests",
+  "apps": [
+    {
+      "packageName": "com.android.camera",
+      "displayName": "Camera",
+      "recordedVersion": "unknown"
+    }
+  ],
+  "recordedDevice": {
+    "manufacturer": "vivo",
+    "model": "iQOO 9T",
+    "androidSdk": 34,
+    "widthPx": 0,
+    "heightPx": 0,
+    "densityDpi": 0
+  },
+  "createdAtEpochMs": 1795219200000,
+  "modifiedAtEpochMs": 1795219200000,
+  "media": {
+    "photos": 1,
+    "videos": 0,
+    "videoDurationMs": 5000,
+    "durationToleranceMs": 2000
+  },
+  "steps": [
+    {
+      "id": "launch",
+      "kind": "LAUNCH_APP",
+      "label": "Launch Camera",
+      "packageName": "com.android.camera",
+      "waitMs": 0,
+      "timeoutMs": 10000,
+      "gestureDurationMs": 80,
+      "maxAttempts": 1,
+      "needsReview": false,
+      "classificationUncertain": false,
+      "interActionDelayMs": 0
+    },
+    {
+      "id": "photo",
+      "kind": "TAKE_PHOTO",
+      "label": "Review actual photo shutter and confirm Photo mode",
+      "packageName": "com.android.camera",
+      "waitMs": 0,
+      "timeoutMs": 10000,
+      "gestureDurationMs": 80,
+      "maxAttempts": 1,
+      "needsReview": true,
+      "classificationUncertain": true,
+      "interActionDelayMs": 1200,
+      "locator": {
+        "resourceId": "com.android.camera:id/shutter_button",
+        "allowCoordinateFallback": false
+      }
+    },
+    {
+      "id": "verify",
+      "kind": "VERIFY_MEDIA",
+      "label": "Verify ONE new photo and ZERO new videos",
+      "packageName": "com.android.camera",
+      "waitMs": 0,
+      "timeoutMs": 10000,
+      "gestureDurationMs": 80,
+      "maxAttempts": 1,
+      "needsReview": false,
+      "classificationUncertain": false,
+      "interActionDelayMs": 0
+    }
+  ]
+}

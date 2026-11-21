@@ -28,7 +28,8 @@ object BatchController {
     private var paused = false
 
     fun run(context: Context, presets: List<Preset>, repository: PresetRepository, stopOnFail: Boolean) {
-        if (job?.isActive == true || ExecutionController.state.value.running) return
+        if (job?.isActive == true || ExecutionController.state.value.running ||
+            RecordingSession.state.value?.active == true) return
         val service = AutomationAccessibilityService.instance
         if (service == null || presets.isEmpty()) {
             mutable.value = BatchUiState(error = "Enable accessibility and select at least one preset")
@@ -49,7 +50,7 @@ object BatchController {
                             while (paused) { delay(150); currentCoroutineContext().ensureActive() }
                         })
                     val report = runner.execute(preset)
-                    repository.saveReport(report)
+                    withContext(NonCancellable) { repository.saveReport(report) }
                     results += report
                     mutable.value = mutable.value.copy(reports = results.toList())
                     if (stopOnFail && report.outcome != Outcome.PASS) break
