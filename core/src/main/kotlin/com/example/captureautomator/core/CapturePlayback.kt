@@ -52,13 +52,13 @@ suspend fun <T : Any> captureOnce(
 /** Fixed scan budget and hard coroutine deadline; transient results never trigger another capture. */
 suspend fun pollMedia(
     timing: PlaybackTiming, expected: MediaExpectation, scan: suspend () -> MediaResult,
-    onScan: (Int, MediaResult) -> Unit = { _, _ -> }
+    maxScans: Int = 31, intervalMs: Long = 500, onScan: (Int, MediaResult) -> Unit = { _, _ -> }
 ): MediaResult {
     var last = MediaResult(issues = listOf("Media verification timed out before first scan"))
     var previousEvidence: List<String>? = null
     var stable = 0
-    val completed = withTimeoutOrNull(20_000) {
-        for (index in 0..30) {
+    val completed = withTimeoutOrNull(maxScans * intervalMs + 4_500) {
+        for (index in 0 until maxScans) {
             timing.waitMs(0)
             last = scan()
             onScan(index + 1, last)
@@ -67,7 +67,7 @@ suspend fun pollMedia(
             stable = if (exact && last.mediaEvidence == previousEvidence) stable + 1 else 0
             previousEvidence = last.mediaEvidence
             if (exact && stable >= 2) return@withTimeoutOrNull true
-            if (index < 30) timing.waitMs(500)
+            if (index + 1 < maxScans) timing.waitMs(intervalMs)
         }
         false
     }

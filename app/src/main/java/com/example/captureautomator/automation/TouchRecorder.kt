@@ -44,6 +44,10 @@ object TouchRecorder {
         message.value = "Open the selected app; wait for the Ready touch controls."
         monitor = scope.launch {
             try {
+                val verifier = MediaVerifier(service)
+                var segmentStart = System.currentTimeMillis()
+                var segmentBase = verifier.baseline()
+                var nextMinimum: Int? = null
                 var previous: TouchProfile? = null
                 var stable = 0
                 var wasAvailable = false
@@ -63,7 +67,14 @@ object TouchRecorder {
                         if (stable < 2) { hide(); delay(120); continue }
                         val binding = recorded ?: current
                         if (draft.activeTouchPackage != current.packageName || recorded == null) {
-                            hide(); RecordingSession.touchProfile(service, binding); resetDelay()
+                            hide()
+                            if (draft.activeTouchPackage != current.packageName) {
+                                segmentStart = System.currentTimeMillis()
+                                segmentBase = verifier.baseline()
+                            }
+                            RecordingSession.touchProfile(service, binding, nextMinimum)
+                            nextMinimum = null
+                            resetDelay()
                         }
                         if (TouchPolicy.compatibility(binding, current).isNotEmpty()) {
                             hide(); wasAvailable = false
@@ -82,7 +93,24 @@ object TouchRecorder {
                                 "Back" to { back(service, binding) },
                                 *if (draft.apps.size > 1) arrayOf("Next" to {
                                     val next = draft.apps[(draft.apps.indexOfFirst { it.packageName == binding.packageName } + 1) % draft.apps.size]
-                                    hide(); com.example.captureautomator.util.AndroidDevice.launch(service, next.packageName)
+                                    if (!busy) {
+                                        busy = true
+                                        hide()
+                                        forwarding = scope.launch {
+                                            try {
+                                                val touched = draft.steps.takeLastWhile { it.kind != ActionKind.LAUNCH_APP }
+                                                    .any { it.kind == ActionKind.RECORDED_TOUCH }
+                                                val requiresSave = !draft.paused && touched && (draft.media.photos > 0 || draft.media.videos > 0)
+                                                if (requiresSave) android.widget.Toast.makeText(service, "Waiting for this app to save", android.widget.Toast.LENGTH_SHORT).show()
+                                                val count = if (requiresSave) verifier.waitForSaved(segmentBase, draft.media,
+                                                    binding.packageName, segmentStart, 1, PlaybackTiming { ensureActive() }) else 0
+                                                if ((!requiresSave || count > 0) && service.activePackage() == binding.packageName) {
+                                                    nextMinimum = count
+                                                    com.example.captureautomator.util.AndroidDevice.launch(service, next.packageName)
+                                                } else android.widget.Toast.makeText(service, "App switch withheld. Check the local save, or Pause then Next for navigation only.", android.widget.Toast.LENGTH_LONG).show()
+                                            } finally { if (generation == owner) busy = false }
+                                        }
+                                    }
                                 }) else emptyArray(),
                                 "Stop" to { RecordingSession.stop(service); service.clearIndicator(); showApp(service) }))
                             bar = controls.first; label = controls.second

@@ -53,7 +53,7 @@ object BatchController {
                     withContext(NonCancellable) { repository.saveReport(report) }
                     results += report
                     mutable.value = mutable.value.copy(reports = results.toList())
-                    if (stopOnFail && report.outcome != Outcome.PASS) break
+                    if ((stopOnFail || report.results.any { it.message.startsWith("App switch withheld") } || report.media.issues.any { it.contains("deadline reached") }) && report.outcome != Outcome.PASS) break
                 }
             } catch (_: CancellationException) {
                 // Completed individual reports remain saved; never silently retry media captures.

@@ -29,9 +29,24 @@ class MediaVerifier(private val context: Context) {
     suspend fun poll(baseline: Snapshot, expected: MediaExpectation, targetPackages: Set<String>,
                      startedAt: Long, timing: PlaybackTiming,
                      onScan: (Int, MediaResult) -> Unit): MediaResult {
-        return pollMedia(timing, expected,
+        return pollMedia(timing, expected, maxScans = 61, intervalMs = 1000,
             scan = { verify(baseline, expected, targetPackages, startedAt) },
             onScan = { index, result -> onScan(index, result) })
+    }
+
+    suspend fun waitForSaved(base: Snapshot, expected: MediaExpectation, pkg: String, since: Long,
+                             minimum: Int, timing: PlaybackTiming): Int {
+        var previous = emptyList<String>()
+        var stable = 0
+        repeat(61) {
+            timing.waitMs(0)
+            val evidence = verify(base, expected, setOf(pkg), since).mediaEvidence.sorted()
+            stable = if (evidence.size >= minimum && evidence == previous) stable + 1 else 0
+            if (stable >= 2) return evidence.size
+            previous = evidence
+            if (it < 60) timing.waitMs(1000)
+        }
+        return 0
     }
 
     data class MediaFile(
@@ -86,12 +101,14 @@ class MediaVerifier(private val context: Context) {
         var validVideos = 0
         for (file in recent) {
             currentCoroutineContext().ensureActive()
-            if (file.size <= 0) { issues += "Zero-byte file: ${file.uri}"; continue }
             val owner = file.ownerPackage
+            if (owner != null && owner !in targetPackages) continue
             if (owner == null || owner !in targetPackages) {
                 fullyAttributable = false
                 issues += "Cannot establish target-app ownership for: ${file.uri} (reported owner: ${owner ?: "unknown"})"
             }
+            if (owner == null) continue
+            if (file.size <= 0) { issues += "Empty target file: ${file.uri}"; continue }
             val validator = if (file.isVideo) validateVideo(file, expected) else validatePhoto(file)
             if (validator != null) {
                 issues += "${file.uri}: $validator"
@@ -100,7 +117,7 @@ class MediaVerifier(private val context: Context) {
                 evidence += "${if (file.isVideo) "VIDEO" else "PHOTO"} ${file.uri} owner=$owner size=${file.size}"
             }
         }
-        if (validPhotos != expected.photos) issues += "Expected ${expected.photos} photos; found $validPhotos valid new photos"
+        if (validPhotos != expected.photos) issues += "Expected ${expected.photos} photos; found $validPhotos valid new shared photos. Confirm each local save and the preset photo count"
         if (validVideos != expected.videos) issues += "Expected ${expected.videos} videos; found $validVideos valid new videos"
         MediaResult(validPhotos, validVideos, fullyAttributable,
             issues.distinct(), evidence)

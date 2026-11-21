@@ -39,6 +39,7 @@ object PresetValidation {
         preset.steps.forEachIndexed { index, step ->
             val prefix = "Step ${index + 1}"
             if (step.kind == ActionKind.RECORDED_TOUCH) errors += TouchPolicy.errors(step.touchStroke).map { "$prefix: $it" }
+            if (step.minimumSavedBeforeLaunch != null && step.minimumSavedBeforeLaunch !in 0..1000) errors += "$prefix has invalid media wait count"
             if (step.label.isBlank()) errors += "$prefix has no label"
             if (step.timeoutMs !in 500L..120_000L) errors += "$prefix has invalid timeout"
             if (step.maxAttempts !in 1..5) errors += "$prefix has invalid retry count"

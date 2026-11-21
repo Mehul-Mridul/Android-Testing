@@ -27,8 +27,10 @@ object RecentAppsCleanup {
                 val node = queue.removeFirst()
                 val id = node.viewIdResourceName?.substringAfter(":id/")
                 val label = (node.contentDescription ?: node.text)?.toString()?.trim()?.lowercase()
+                val vivoClean = pkg == "com.android.launcher3" && id == "action_clean" &&
+                    root.findAccessibilityNodeInfosByViewId("$pkg:id/overview_panel").any { it.isVisibleToUser }
                 if (node.isVisibleToUser && node.isEnabled && node.isClickable &&
-                    (id in setOf("clear_all", "clear_all_button", "clearAnimView", "clear_button") ||
+                    (vivoClean || id in setOf("clear_all", "clear_all_button", "clearAnimView", "clear_button") ||
                         label in setOf("clear all", "close all", "clear all apps", "close all apps"))) matches += node
                 for (i in 0 until node.childCount) node.getChild(i)?.let(queue::add)
             }

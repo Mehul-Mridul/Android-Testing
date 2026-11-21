@@ -87,6 +87,11 @@ class ExecutionEngine(
                 "${app.displayName} updated ${app.recordedVersion} -> $installed; selectors checked at runtime"
             else null
         }
+        var segmentBase = baseline
+        var segmentStart = startedAt
+        var segmentPackage: String? = null
+        var touched = false
+        var switchBlocked = false
         var media: MediaResult? = null
         try {
             for ((index, savedStep) in preset.steps.withIndex()) {
@@ -115,7 +120,29 @@ class ExecutionEngine(
                     }
                 }) { attempt ->
                     event("ACTION_ATTEMPT", step, attempt)
-                    val actionResult = try { gate(); perform(step, preset) }
+                    val actionResult = try {
+                        gate()
+                        val previous = segmentPackage
+                        if (step.kind == ActionKind.LAUNCH_APP && previous != null && previous != step.packageName && touched) {
+                            val minimum = step.minimumSavedBeforeLaunch ?: if (preset.media.photos + preset.media.videos > 0) 1 else 0
+                            if (minimum > 0) {
+                                val confirmed = verifier.waitForSaved(segmentBase, preset.media, previous, segmentStart, minimum, timing)
+                                event("APP_SAVE_BARRIER", step, values = mapOf("required" to minimum.toString(), "found" to confirmed.toString()))
+                                switchBlocked = confirmed < minimum
+                            }
+                        }
+                        if (switchBlocked) false to "App switch withheld: previous app has not saved the required readable media"
+                        else {
+                            if (step.kind == ActionKind.LAUNCH_APP) {
+                                segmentBase = verifier.baseline()
+                                segmentStart = System.currentTimeMillis()
+                                segmentPackage = step.packageName
+                                touched = false
+                            }
+                            if (capture || step.kind == ActionKind.TAP) touched = true
+                            perform(step, preset)
+                        }
+                    }
                     catch (e: CancellationException) {
                         event("ACTION_CANCELLED", step, attempt,
                             mapOf("captureMayHaveBeenDispatched" to capture.toString(), "mediaConfirmed" to "false"))
@@ -161,13 +188,16 @@ class ExecutionEngine(
         }
         val verdict = Verdict.outcome(stepResults, media, preset.media)
         val outcome = if (stepResults.size != preset.steps.size && verdict == Outcome.PASS) Outcome.FAIL else verdict
-        var cleanup = ""
+        fun returnToAutomator() = AndroidDevice.launch(context, context.packageName)
+        val returned = returnToAutomator() && ui.waitForApp(context.packageName, 5000)
+        var cleanup = if (returned) "" else "Could not return to Automator"
         if (preset.clearRecentsAfterRun == true) {
-            cleanup = if (outcome == Outcome.PASS) {
+            cleanup = if (returned && !switchBlocked) {
                 try { RecentAppsCleanup.clear(service, timing) }
                 catch (_: CancellationException) { "RECENTS_CANCELLED: no further cleanup actions" }
                 catch (_: Exception) { "RECENTS_UNAVAILABLE: close recent apps manually" }
-            } else "RECENTS_SKIPPED: run did not pass; inspect the app before closing it"
+            } else "RECENTS_SKIPPED: app return or save barrier incomplete"
+            returnToAutomator()
             event("RECENTS_CLEANUP", values = mapOf("status" to cleanup.substringBefore(':')))
         }
         return report(preset, startedAt, outcome, stepResults, media, 0,

@@ -96,7 +96,7 @@ object RecordingSession {
     fun stop(context: Context) { observeJob?.cancel(); mutable.value?.let { mutable.value = it.copy(active = false, paused = false) }; TouchRecorder.stop(); persist(context) }
     fun discard(context: Context) { observeJob?.cancel(); TouchRecorder.stop(); mutable.value = null; persist(context) }
 
-    fun touchProfile(context: Context, profile: TouchProfile) {
+    fun touchProfile(context: Context, profile: TouchProfile, previousSaved: Int? = null) {
         val draft = mutable.value ?: return
         if (!draft.active || draft.playbackMode != PlaybackMode.RECORDED_TOUCHES ||
             draft.apps.none { it.packageName == profile.packageName }) return
@@ -105,7 +105,7 @@ object RecordingSession {
         val previous = draft.activeTouchPackage ?: draft.apps.first().packageName
         val transition = if (previous != profile.packageName) listOf(AutomationStep(
             label = "Launch ${draft.apps.first { it.packageName == profile.packageName }.displayName}",
-            kind = ActionKind.LAUNCH_APP, packageName = profile.packageName, maxAttempts = 1)) else emptyList()
+            kind = ActionKind.LAUNCH_APP, packageName = profile.packageName, minimumSavedBeforeLaunch = previousSaved, maxAttempts = 1)) else emptyList()
         mutable.value = draft.copy(touchProfile = draft.touchProfile ?: profile, touchProfiles = updated,
             activeTouchPackage = profile.packageName, steps = draft.steps + transition)
         if (previous != profile.packageName || updated != profiles) persist(context)

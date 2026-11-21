@@ -156,6 +156,15 @@ class PlaybackTest {
         assertTrue(media.issues.isEmpty())
     }
 
+    @Test fun `slow shared save arriving after old timeout is verified once stable`() = runTest {
+        val result = pollMedia(PlaybackTiming { }, MediaExpectation(1, 0), scan = {
+            if (currentTime < 28_000) MediaResult(verificationComplete = true)
+            else MediaResult(1, 0, true, mediaEvidence = listOf("completed-night-photo"))
+        }, maxScans = 61, intervalMs = 1000)
+        assertEquals(Outcome.PASS, Verdict.outcome(emptyList(), result, MediaExpectation(1, 0)))
+        assertEquals(30_000, currentTime)
+    }
+
     @Test fun `missing or inaccessible media stops at bounded scan budget`() = runTest {
         var scans = 0
         val media = pollMedia(PlaybackTiming { }, MediaExpectation(1, 0), scan = {

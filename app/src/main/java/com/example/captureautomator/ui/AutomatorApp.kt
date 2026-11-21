@@ -241,8 +241,8 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                                    onBegin: (String, List<AppSpec>, MediaExpectation, PlaybackMode) -> Unit) {
     var name by remember { mutableStateOf("") }
     var query by remember { mutableStateOf("") }
-    var photoCount by remember { mutableStateOf("2") }
-    var videoCount by remember { mutableStateOf("1") }
+    var photoCount by remember { mutableStateOf("1") }
+    var videoCount by remember { mutableStateOf("0") }
     var durationSeconds by remember { mutableStateOf("5") }
     var mode by remember { mutableStateOf(PlaybackMode.RECORDED_TOUCHES) }
     val selected = remember { mutableStateListOf<String>() }
@@ -400,9 +400,9 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(current.clearRecentsAfterRun == true, { current = current.copy(clearRecentsAfterRun = it) })
-            Text("Clear ALL recent apps after a successful run", style = MaterialTheme.typography.bodySmall)
+            Text("Clear ALL recent apps after verification", style = MaterialTheme.typography.bodySmall)
         }
-        Text("Uses the visible Recents screen when supported. Does not force-stop apps; skipped on failure or Stop.", style = MaterialTheme.typography.bodySmall)
+        Text("Returns to Automator first. Cleanup is skipped on Stop or an incomplete app switch.", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(editingName, { editingName = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(editingFolder, { editingFolder = it }, label = { Text("Folder") }, modifier = Modifier.fillMaxWidth())
         Text("Expected ${current.media.photos} photos, ${current.media.videos} videos of ${current.media.videoDurationMs / 1000}s",
@@ -492,6 +492,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     var recordedDelay by remember(step.id) { mutableStateOf(step.interActionDelayMs.toString()) }
     var attempts by remember(step.id) { mutableStateOf(step.maxAttempts.toString()) }
     var authorizedText by remember(step.id) { mutableStateOf(step.authorizedTestText.orEmpty()) }
+    var minimum by remember(step.id) { mutableStateOf(step.minimumSavedBeforeLaunch?.toString().orEmpty()) }
     var expanded by remember { mutableStateOf(false) }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Edit automation step") },
         text = {
@@ -507,6 +508,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                     }
                 }
                 OutlinedTextField(packageName, { packageName = it }, label = { Text("Target package") })
+                if (kind == ActionKind.LAUNCH_APP) OutlinedTextField(minimum, { if (it.isEmpty() || it.toIntOrNull() in 0..1000) minimum = it }, label = { Text("Files to wait for in previous app") }, supportingText = { Text("Default: one for capture workflows. Enter 0 for navigation only.") })
                 if (kind == ActionKind.RECORDED_TOUCH) Text("Recorded path: ${step.touchStroke?.points?.size ?: 0} points, ${step.touchStroke?.durationMs ?: 0}ms. Use Calibrate touch copy to move its points.")
                 if (kind != ActionKind.RECORDED_TOUCH) {
                 OutlinedTextField(rid, { rid = it }, label = { Text("Resource ID (highest priority)") })
@@ -545,7 +547,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 ActionKind.WAIT_FOR_ELEMENT, ActionKind.WAIT_FOR_ELEMENT_GONE)
             val identified = !loc.resourceId.isNullOrBlank() || !loc.contentDescription.isNullOrBlank() ||
                 !loc.text.isNullOrBlank() || (useCoords && loc.normalizedX != null && loc.normalizedY != null)
-            onUpdate(step.copy(label = label, kind = kind, packageName = packageName.ifBlank { null },
+            onUpdate(step.copy(minimumSavedBeforeLaunch = minimum.toIntOrNull(), label = label, kind = kind, packageName = packageName.ifBlank { null },
                 locator = loc, waitMs = waitMs.toLongOrNull() ?: 0,
                 timeoutMs = timeoutMs.toLongOrNull() ?: 8000,
                 maxAttempts = attempts.toIntOrNull() ?: 2,
