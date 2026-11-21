@@ -4,6 +4,17 @@ import kotlinx.coroutines.delay
 
 /** Pause time does not consume recorded waits. Stop cancels at every gate/delay. */
 class PlaybackTiming(private val gate: suspend () -> Unit) {
+    /** Real camera recording continues during scheduling delays and pauses. Recompute the
+     * remaining deadline each time instead of adding readiness time to the requested duration. */
+    suspend fun waitUntil(deadlineMs: Long, nowMs: () -> Long) {
+        while (true) {
+            gate()
+            val remaining = deadlineMs - nowMs()
+            if (remaining <= 0) return
+            delay(minOf(remaining, 100L))
+        }
+    }
+
     suspend fun waitMs(durationMs: Long) {
         var remaining = durationMs
         while (remaining > 0) {

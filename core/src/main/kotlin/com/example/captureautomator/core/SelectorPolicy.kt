@@ -14,8 +14,13 @@ data class UiCandidate(
 object SelectorPolicy {
     fun confidence(candidate: UiCandidate, locator: UiLocator): Float {
         if (!candidate.visible) return 0f
-        if (!locator.resourceId.isNullOrBlank() && candidate.resourceId == locator.resourceId) return 1f
         if (!locator.className.isNullOrBlank() && candidate.className != locator.className) return 0f
+        // A shared shutter ID must never override a conflicting state description.
+        if (!locator.contentDescription.isNullOrBlank() &&
+            candidate.contentDescription?.trim()?.equals(locator.contentDescription.trim(), true) != true) return 0f
+        if (!locator.text.isNullOrBlank() &&
+            candidate.text?.trim()?.equals(locator.text.trim(), true) != true) return 0f
+        if (!locator.resourceId.isNullOrBlank() && candidate.resourceId == locator.resourceId) return 1f
         if (!locator.contentDescription.isNullOrBlank() &&
             candidate.contentDescription?.trim()?.equals(locator.contentDescription.trim(), true) == true) return 0.92f
         if (!locator.text.isNullOrBlank() &&

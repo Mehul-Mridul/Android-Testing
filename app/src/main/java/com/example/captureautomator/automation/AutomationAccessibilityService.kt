@@ -35,7 +35,8 @@ class AutomationAccessibilityService : AccessibilityService() {
         instance = this
         serviceInfo = serviceInfo.apply {
             flags = flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS or
-                AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
             feedbackType = AccessibilityServiceInfo.FEEDBACK_GENERIC
         }
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).createNotificationChannel(
@@ -44,6 +45,8 @@ class AutomationAccessibilityService : AccessibilityService() {
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         if (event == null) return
+        val draft = RecordingSession.state.value ?: return
+        if (!draft.active || draft.paused || draft.apps.none { it.packageName == event.packageName?.toString() }) return
         try { RecordingSession.onEvent(this, event, rootInActiveWindow) } catch (_: Exception) {
             // Third-party accessibility hierarchies may contain invalid/stale nodes.
         }

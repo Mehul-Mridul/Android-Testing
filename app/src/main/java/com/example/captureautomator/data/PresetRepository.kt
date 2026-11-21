@@ -55,7 +55,11 @@ class PresetRepository(context: Context) {
         val parsed = Codec.parsePreset(json)
         val imported = parsed.copy(id = UUID.randomUUID().toString(),
             name = parsed.name + " (imported)", modifiedAtEpochMs = System.currentTimeMillis(),
-            steps = parsed.steps.map { it.copy(id = UUID.randomUUID().toString(), needsReview = true) })
+            steps = parsed.steps.map {
+                val safe = CameraPolicy.safeImportedStep(it)
+                it.copy(id = UUID.randomUUID().toString(), needsReview = !safe,
+                    classificationUncertain = if (safe) false else it.classificationUncertain)
+            })
         save(imported)
         return imported
     }

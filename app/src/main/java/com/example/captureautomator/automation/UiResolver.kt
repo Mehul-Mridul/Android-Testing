@@ -94,9 +94,11 @@ class UiResolver(private val service: AutomationAccessibilityService,
     /** Readiness probes never click. Resolve again after the final pause gate, then send one stroke.
      * Capture never tries ACTION_CLICK followed by a gesture: a false return can still be ambiguous.
      */
-    suspend fun capture(locator: UiLocator?, packageName: String, timeoutMs: Long): Pair<Boolean, String> {
+    suspend fun capture(locator: UiLocator?, packageName: String, timeoutMs: Long,
+                        beforeFinalResolve: suspend () -> Unit = {}, onDispatch: () -> Unit = {},
+                        stateReady: () -> Boolean = { true }): Pair<Boolean, String> {
         fun ready(): Match? {
-            if (service.activePackage() != packageName) return null
+            if (service.activePackage() != packageName || !stateReady()) return null
             val match = resolve(locator) ?: return null
             val node = match.node
             val bounds = Rect().also { node.getBoundsInScreen(it) }
@@ -107,8 +109,10 @@ class UiResolver(private val service: AutomationAccessibilityService,
         }
         val result = captureOnce(timing, timeoutMs, ::ready,
             signature = { match -> Rect().also(match.node::getBoundsInScreen).toShortString() },
+            beforeFinalResolve = beforeFinalResolve,
             dispatch = { match ->
                 val bounds = Rect().also(match.node::getBoundsInScreen)
+                onDispatch()
                 gesture(bounds.centerX().toFloat(), bounds.centerY().toFloat(),
                     bounds.centerX().toFloat(), bounds.centerY().toFloat(), 80)
             })

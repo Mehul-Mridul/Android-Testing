@@ -33,21 +33,58 @@ object RecordingSession {
     private val writeMutex = Mutex()
     private var lastEventAt = 0L
     private var lastPackage: String? = null
+    private var cameraTracker = CameraRecordingTracker()
+    private var recordedVideoStartedAt: Long? = null
+    private val observeScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+    private var observeJob: Job? = null
 
     fun begin(context: Context, name: String, apps: List<AppSpec>, media: MediaExpectation) {
         require(name.isNotBlank() && apps.isNotEmpty())
         check(mutable.value?.active != true) { "Another recording is active" }
         lastEventAt = 0L
         lastPackage = null
+        cameraTracker = CameraRecordingTracker()
+        recordedVideoStartedAt = null
         mutable.value = RecordingDraft(name, apps, AndroidDevice.profile(context), media,
-            System.currentTimeMillis())
+            System.currentTimeMillis(), steps = listOf(AutomationStep(
+                label = "Launch ${apps.first().displayName}", kind = ActionKind.LAUNCH_APP,
+                packageName = apps.first().packageName)))
         persist(context)
+        observeJob?.cancel()
+        observeJob = observeScope.launch {
+            while (mutable.value?.active == true) {
+                val current = mutable.value
+                if (current?.paused == false && current.apps.any { it.packageName == CameraPolicy.PACKAGE }) {
+                    AutomationAccessibilityService.instance?.let { service ->
+                        val state = CameraUi.state(service.currentRoot())
+                        recordCameraTransition(context, state)
+                    }
+                }
+                delay(120)
+            }
+        }
+    }
+
+    private fun recordCameraTransition(context: Context, state: CameraState) {
+        val transition = cameraTracker.observe(state) ?: return
+        val now = System.currentTimeMillis()
+        if (transition == ActionKind.START_VIDEO) recordedVideoStartedAt = now
+        val recordedDuration = if (transition == ActionKind.STOP_VIDEO)
+            recordedVideoStartedAt?.let { now - it } ?: 0 else 0
+        val mode = transition in setOf(ActionKind.SELECT_PHOTO_MODE, ActionKind.SELECT_VIDEO_MODE)
+        addStep(context, AutomationStep(label = CameraPolicy.label(transition), kind = transition,
+            packageName = CameraPolicy.PACKAGE, locator = if (mode) CameraPolicy.modeLocator(transition == ActionKind.SELECT_VIDEO_MODE)
+                else UiLocator(resourceId = CameraPolicy.SHUTTER), capturedAtEpochMs = now,
+            interActionDelayMs = if (transition == ActionKind.STOP_VIDEO || lastEventAt == 0L) 0 else now - lastEventAt,
+            recordedVideoDurationMs = recordedDuration))
+        if (transition == ActionKind.STOP_VIDEO) recordedVideoStartedAt = null
+        lastEventAt = now
     }
 
     fun pause(context: Context) { mutable.value?.let { mutable.value = it.copy(paused = true) }; persist(context) }
-    fun resume(context: Context) { mutable.value?.let { mutable.value = it.copy(paused = false) }; persist(context) }
-    fun stop(context: Context) { mutable.value?.let { mutable.value = it.copy(active = false, paused = false) }; persist(context) }
-    fun discard(context: Context) { mutable.value = null; persist(context) }
+    fun resume(context: Context) { cameraTracker = CameraRecordingTracker(); mutable.value?.let { mutable.value = it.copy(paused = false) }; persist(context) }
+    fun stop(context: Context) { observeJob?.cancel(); mutable.value?.let { mutable.value = it.copy(active = false, paused = false) }; persist(context) }
+    fun discard(context: Context) { observeJob?.cancel(); mutable.value = null; persist(context) }
 
     /** If process death occurred, the draft can be reviewed but NEVER resumes monitoring itself. */
     fun recover(context: Context) {
@@ -94,6 +131,26 @@ object RecordingSession {
         if (pkg == context.packageName) return
         val now = System.currentTimeMillis()
         val eventType = event.eventType
+        if (pkg == CameraPolicy.PACKAGE) {
+            val observed = CameraUi.state(appRoot)
+            recordCameraTransition(context, observed)
+            val sourceId = event.source?.viewIdResourceName
+            val sourceMode = event.source?.contentDescription?.toString()
+            if (sourceId == CameraPolicy.SHUTTER) {
+                if (eventType == AccessibilityEvent.TYPE_VIEW_CLICKED && observed == CameraState.PHOTO_READY &&
+                    (lastEventAt == 0L || now - lastEventAt >= 170)) {
+                    addStep(context, AutomationStep(label = CameraPolicy.label(ActionKind.TAKE_PHOTO),
+                        kind = ActionKind.TAKE_PHOTO, packageName = pkg,
+                        locator = UiLocator(resourceId = CameraPolicy.SHUTTER), capturedAtEpochMs = now,
+                        interActionDelayMs = if (lastEventAt == 0L) 0 else now - lastEventAt))
+                    lastEventAt = now
+                }
+                // Video start/stop are emitted ONLY from observed transitions, never the post-click label.
+                return
+            }
+            if (sourceId?.contains("side_button_recycler") == true || sourceId == CameraPolicy.MODE_STRIP ||
+                sourceMode in setOf("PhotoMode", "VideoMode")) return
+        }
         if (eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
             if (lastPackage != pkg) {
                 lastPackage = pkg

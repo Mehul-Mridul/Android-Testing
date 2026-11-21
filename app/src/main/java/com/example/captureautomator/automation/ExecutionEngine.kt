@@ -19,6 +19,8 @@ class ExecutionEngine(
 ) {
     private val timing = PlaybackTiming(gate)
     private val ui = UiResolver(service, timing)
+    private val camera = CameraUi(service, timing)
+    private var lastMediaScan: MediaResult? = null
     private val runId = UUID.randomUUID().toString()
     private val runStarted = SystemClock.elapsedRealtime()
     private val events = mutableListOf<RunEvent>()
@@ -78,7 +80,11 @@ class ExecutionEngine(
         }
         var media: MediaResult? = null
         try {
-            for ((index, step) in preset.steps.withIndex()) {
+            for ((index, savedStep) in preset.steps.withIndex()) {
+                val knownCameraAction = (savedStep.packageName ?: preset.apps.firstOrNull()?.packageName) == CameraPolicy.PACKAGE &&
+                    savedStep.kind in setOf(ActionKind.TAKE_PHOTO, ActionKind.START_VIDEO, ActionKind.STOP_VIDEO,
+                        ActionKind.SELECT_PHOTO_MODE, ActionKind.SELECT_VIDEO_MODE)
+                val step = if (knownCameraAction) savedStep.copy(label = CameraPolicy.label(savedStep.kind)) else savedStep
                 gate()
                 onProgress(index, step, stepResults.toList())
                 val began = SystemClock.elapsedRealtime()
@@ -91,7 +97,8 @@ class ExecutionEngine(
                     break
                 }
                 var result = runPlaybackStep(timing, step, beforeAttempts = {
-                    if (step.kind == ActionKind.STOP_VIDEO) {
+                    if (step.kind == ActionKind.STOP_VIDEO &&
+                        (step.packageName ?: preset.apps.firstOrNull()?.packageName) != CameraPolicy.PACKAGE) {
                         // Recorded delay already elapsed. Wait only the remaining minimum duration.
                         val videoStart = checkNotNull(startedVideoAtElapsedMs)
                         timing.waitMs((preset.media.videoDurationMs -
@@ -111,8 +118,9 @@ class ExecutionEngine(
                             "status" to if (capture) actionResult.second.substringBefore(':') else step.kind.name))
                     actionResult
                 }
+                event("CAMERA_STATE", step, values = CameraUi.observe(service.currentRoot()).evidence + ("observed" to camera.state().name))
                 if (result.first && step.kind == ActionKind.START_VIDEO)
-                    startedVideoAtElapsedMs = SystemClock.elapsedRealtime()
+                    startedVideoAtElapsedMs = camera.recordingStartedAtElapsedMs ?: SystemClock.elapsedRealtime()
                 if (result.first && step.kind == ActionKind.STOP_VIDEO)
                     startedVideoAtElapsedMs = null
                 if (step.kind == ActionKind.VERIFY_MEDIA) {
@@ -138,7 +146,7 @@ class ExecutionEngine(
         } catch (_: CancellationException) {
             event("RUN_CANCELLED", values = mapOf("videoMayStillBeRecording" to (startedVideoAtElapsedMs != null).toString()))
             return report(preset, startedAt, Outcome.CANCELLED, stepResults,
-                media ?: MediaResult(issues = listOf("Stopped by tester; no further gestures. Check Camera manually if video may be recording.")),
+                media ?: lastMediaScan?.copy(verificationComplete = false, issues = lastMediaScan!!.issues + "Verification interrupted by tester") ?: MediaResult(issues = listOf("Stopped by tester; no further gestures. Check Camera manually if video may be recording.")),
                 0, "Cancelled; capture state may be uncertain")
         }
         val verdict = Verdict.outcome(stepResults, media, preset.media)
@@ -160,7 +168,11 @@ class ExecutionEngine(
     private suspend fun verifyMedia(baseline: MediaVerifier.Snapshot, preset: Preset, started: Long): MediaResult {
         event("MEDIA_VERIFICATION_STARTED")
         val result = verifier.poll(baseline, preset.media, preset.apps.map { it.packageName }.toSet(),
-            started, timing) { scan, photos, videos, complete ->
+            started, timing) { scan, snapshot ->
+            lastMediaScan = snapshot
+            val photos = snapshot.photosFound
+            val videos = snapshot.videosFound
+            val complete = snapshot.verificationComplete
             event("MEDIA_SCAN", values = mapOf("scan" to scan.toString(), "photos" to photos.toString(),
                 "videos" to videos.toString(), "complete" to complete.toString()))
         }
@@ -200,7 +212,12 @@ class ExecutionEngine(
         return when (step.kind) {
             ActionKind.TAKE_PHOTO, ActionKind.START_VIDEO, ActionKind.STOP_VIDEO -> {
                 if (pkg == null) false to "No target package"
+                else if (pkg == CameraPolicy.PACKAGE) camera.capture(step.kind, step.timeoutMs, preset.media.videoDurationMs)
                 else ui.capture(step.locator, pkg, step.timeoutMs)
+            }
+            ActionKind.SELECT_PHOTO_MODE, ActionKind.SELECT_VIDEO_MODE -> {
+                if (pkg != CameraPolicy.PACKAGE) false to "Camera mode adapter is unavailable for this package"
+                else camera.ensureMode(step.kind == ActionKind.SELECT_VIDEO_MODE, step.timeoutMs)
             }
             ActionKind.TAP, ActionKind.LONG_PRESS, ActionKind.DOUBLE_TAP -> {
                 screenBeforeLastAction = ui.activeFingerprint()

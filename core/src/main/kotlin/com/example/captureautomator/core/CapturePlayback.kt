@@ -29,6 +29,7 @@ suspend fun runPlaybackStep(
 /** The only callback allowed to act is dispatch, invoked at most once after fresh resolution. */
 suspend fun <T : Any> captureOnce(
     timing: PlaybackTiming, timeoutMs: Long, resolve: () -> T?, signature: (T) -> String,
+    beforeFinalResolve: suspend () -> Unit = {},
     dispatch: suspend (T) -> Boolean
 ): CaptureAttempt {
     var previous: String? = null
@@ -40,6 +41,7 @@ suspend fun <T : Any> captureOnce(
         stable >= 2
     }
     if (!ready) return CaptureAttempt(false, false, "CAPTURE_NOT_READY")
+    beforeFinalResolve()
     timing.waitMs(0)
     val fresh = resolve() ?: return CaptureAttempt(false, false, "CAPTURE_CHANGED")
     if (signature(fresh) != previous) return CaptureAttempt(false, false, "CAPTURE_MOVED")

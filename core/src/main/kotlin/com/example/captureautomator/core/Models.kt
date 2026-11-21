@@ -23,7 +23,7 @@ enum class ActionKind {
     SWIPE, ENTER_TEXT, PRESS_BACK, PRESS_HOME, WAIT_FOR_ELEMENT,
     WAIT_FOR_ELEMENT_GONE, WAIT_FOR_SCREEN_CHANGE, WAIT_MS,
     TAKE_PHOTO, START_VIDEO, STOP_VIDEO, VERIFY_MEDIA,
-    TAKE_SCREENSHOT, ASSERT_ELEMENT, END_RUN
+    TAKE_SCREENSHOT, ASSERT_ELEMENT, END_RUN, SELECT_PHOTO_MODE, SELECT_VIDEO_MODE
 }
 
 /** Normalized coordinates refer to the visible target application window, not the entire display. */
@@ -55,7 +55,9 @@ data class AutomationStep(
     val capturedAtEpochMs: Long? = null,
     val interActionDelayMs: Long = 0,
     /** Heuristic recording classification must be explicitly reviewed before playback. */
-    val classificationUncertain: Boolean = false
+    val classificationUncertain: Boolean = false,
+    /** Reference timing only; known camera STOP is scheduled from the configured media duration. */
+    val recordedVideoDurationMs: Long = 0
 )
 
 data class MediaExpectation(

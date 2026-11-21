@@ -61,7 +61,8 @@ object PresetValidation {
                     else if (recordingPackage != pkg) issues += "Step ${index + 1}: video start/stop target differs"
                     recordingPackage = null
                 }
-                ActionKind.TAKE_PHOTO, ActionKind.VERIFY_MEDIA, ActionKind.END_RUN ->
+                ActionKind.TAKE_PHOTO, ActionKind.SELECT_PHOTO_MODE, ActionKind.SELECT_VIDEO_MODE,
+                ActionKind.VERIFY_MEDIA, ActionKind.END_RUN ->
                     if (recordingPackage != null) issues += "Step ${index + 1}: ${step.kind} while video may be recording"
                 else -> Unit
             }

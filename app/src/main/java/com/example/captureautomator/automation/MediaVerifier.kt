@@ -28,10 +28,10 @@ class MediaVerifier(private val context: Context) {
      */
     suspend fun poll(baseline: Snapshot, expected: MediaExpectation, targetPackages: Set<String>,
                      startedAt: Long, timing: PlaybackTiming,
-                     onScan: (Int, Int, Int, Boolean) -> Unit): MediaResult {
+                     onScan: (Int, MediaResult) -> Unit): MediaResult {
         return pollMedia(timing, expected,
             scan = { verify(baseline, expected, targetPackages, startedAt) },
-            onScan = { index, result -> onScan(index, result.photosFound, result.videosFound, result.verificationComplete) })
+            onScan = { index, result -> onScan(index, result) })
     }
 
     data class MediaFile(

@@ -62,7 +62,7 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
                         ?: error("Cannot read document")
                 }
                 repository.importJson(json)
-            }.onSuccess { notice = "Imported preset. Review all steps before running." }
+            }.onSuccess { notice = "Imported preset. Known Camera actions use runtime state checks; review any flagged steps." }
                 .onFailure { notice = "Import rejected: ${it.message}" }
         }
     }
@@ -350,6 +350,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     var editingName by remember { mutableStateOf(current.name) }
     var editingFolder by remember { mutableStateOf(current.folder) }
     var addNew by remember { mutableStateOf(false) }
+    var repairError by remember { mutableStateOf("") }
     val validation = PresetValidation.errors(current.copy(name = editingName, folder = editingFolder))
     val playbackIssues = PresetValidation.playbackErrors(current)
     Column {
@@ -370,17 +371,25 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         if (validation.isNotEmpty()) Text("Validation: ${validation.first()}", color = MaterialTheme.colorScheme.error)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(onClick = { onSave(current.copy(name = editingName, folder = editingFolder,
-                modifiedAtEpochMs = System.currentTimeMillis())) }, enabled = validation.isEmpty()) { Text("Save") }
+                modifiedAtEpochMs = System.currentTimeMillis())) }, enabled = validation.isEmpty()) { Text("Save preset changes") }
             OutlinedButton(onClick = { addNew = true }) { Text("Add step") }
             TextButton(onClick = onCancel) { Text("Cancel") }
         }
-        Text("Unreviewed: ${current.steps.count { it.needsReview }}. Correct unknown shutter/save actions manually.",
+        if (current.apps.size == 1 && current.apps.single().packageName == CameraPolicy.PACKAGE) {
+            OutlinedButton(onClick = {
+                runCatching { CameraPolicy.repairCopy(current) }.onSuccess(onSave)
+                    .onFailure { repairError = it.message.orEmpty() }
+            }) { Text("Save camera repair copy") }
+            Text("Creates a separate copy with verified mode actions and configured video duration.", style = MaterialTheme.typography.bodySmall)
+            if (repairError.isNotBlank()) Text(repairError, color = MaterialTheme.colorScheme.error)
+        }
+        Text("Unreviewed: ${current.steps.count { it.needsReview }}. Known Camera captures do not require repeated review. Save preset changes after editing.",
             style = MaterialTheme.typography.bodySmall)
         LazyColumn {
             itemsIndexed(current.steps) { index, step ->
                 ElevatedCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Column(Modifier.padding(10.dp)) {
-                        Text("${index + 1}. ${step.label}", fontWeight = FontWeight.SemiBold)
+                        Text("${index + 1}. ${if (step.kind in setOf(ActionKind.TAKE_PHOTO, ActionKind.START_VIDEO, ActionKind.STOP_VIDEO, ActionKind.SELECT_PHOTO_MODE, ActionKind.SELECT_VIDEO_MODE)) CameraPolicy.label(step.kind) else step.label}", fontWeight = FontWeight.SemiBold)
                         Text("${step.kind} · ${step.packageName ?: "default app"}${if (step.needsReview) " · REVIEW" else ""}",
                             style = MaterialTheme.typography.bodySmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
@@ -445,7 +454,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                     OutlinedButton(onClick = { expanded = true }) { Text(kind.name) }
                     DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
                         ActionKind.entries.forEach { option ->
-                            DropdownMenuItem(text = { Text(option.name) }, onClick = { kind = option; expanded = false })
+                            DropdownMenuItem(text = { Text(option.name) }, onClick = { kind = option; label = CameraPolicy.label(option); expanded = false })
                         }
                     }
                 }
@@ -492,7 +501,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 authorizedTestText = authorizedText.ifBlank { null },
                 interActionDelayMs = recordedDelay.toLongOrNull() ?: -1,
                 classificationUncertain = false, needsReview = requiresLocator && !identified))
-        }) { Text("Apply") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+        }) { Text("Apply step changes") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
 }
 
 @Composable private fun HistoryPage(rows: List<ExecutionRow>) {
