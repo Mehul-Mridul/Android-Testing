@@ -149,7 +149,7 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
                             scope.launch {
                                 runCatching { repository.save(updated) }
                                     .onSuccess {
-                                        if (draft != null && !draft.active) RecordingSession.discard(activity)
+                                        if (draft?.active == false) RecordingSession.discard(activity)
                                         edit = null; page = Page.LIBRARY
                                     }.onFailure { notice = "Save failed: ${it.message}" }
                             }

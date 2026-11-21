@@ -113,8 +113,10 @@ class UiResolver(private val service: AutomationAccessibilityService) {
             }
             return result to "Gesture at resolved semantic node ${match.confidence}"
         }
-        if (locator.allowCoordinateFallback && locator.normalizedX != null && locator.normalizedY != null) {
-            val point = mapWindowCoords(locator.normalizedX, locator.normalizedY)
+        val normalizedX = locator.normalizedX
+        val normalizedY = locator.normalizedY
+        if (locator.allowCoordinateFallback && normalizedX != null && normalizedY != null) {
+            val point = mapWindowCoords(normalizedX, normalizedY)
             return gesture(point.first, point.second, point.first, point.second,
                 if (kind == "LONG_PRESS") 650 else 80) to "Explicitly approved coordinate fallback"
         }
