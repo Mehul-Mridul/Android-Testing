@@ -11,7 +11,7 @@ object RecentAppsCleanup {
         "com.bbk.launcher2", "com.vivo.launcher", "com.sec.android.app.launcher", "com.miui.home",
         "com.google.android.apps.nexuslauncher", "com.oplus.launcher")
     private val clearIds = setOf("clear_all", "clear_all_button", "clearAnimView", "clear_button")
-    private val clearLabels = setOf("clear all", "close all", "clear all apps", "close all apps")
+    private val clearLabels = setOf("clear all", "close all", "clear all apps", "close all apps", "clear all - button", "close all - button")
 
     suspend fun clear(service: AutomationAccessibilityService, timing: PlaybackTiming): String {
         timing.waitMs(0)
@@ -46,8 +46,12 @@ object RecentAppsCleanup {
                             val density = service.resources.displayMetrics.density
                             if (target?.packageName?.toString() == pkg && target?.isClickable == true &&
                                 target?.isVisibleToUser == true && target?.isEnabled == true &&
-                                bounds.width() in 1..(400 * density).toInt() &&
-                                bounds.height() in 1..(100 * density).toInt()) matches += checkNotNull(target)
+                                ((bounds.width() in 1..(400 * density).toInt() &&
+                                    bounds.height() in 1..(100 * density).toInt()) ||
+                                    // Some launchers transform a portrait overview in landscape and
+                                    // expose empty bounds. A directly labelled native click is safe;
+                                    // never infer a coordinate or accept an unlabelled ancestor here.
+                                    (target == node && label in clearLabels && bounds.isEmpty))) matches += checkNotNull(target)
                         }
                     }
                     for (i in 0 until node.childCount) node.getChild(i)?.let(queue::add)
