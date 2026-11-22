@@ -214,7 +214,7 @@ class UiResolver(private val service: AutomationAccessibilityService,
         timing.waitMs(0)
         if (!ready()) return false to "TOUCH_INCOMPATIBLE: foreground/window changed; no gesture sent"
         if (!TouchEnvironment.avoidsInput(service, profile, stroke))
-            return false to "TOUCH_INPUT_EXCLUDED: gesture overlaps an editable field"
+            return false to "TOUCH_INPUT_OR_POPUP_EXCLUDED: gesture overlaps an editable field or leaves the focused window"
         val path = Path()
         stroke.points.forEachIndexed { index, point ->
             val (x, y) = TouchPolicy.map(point, profile)

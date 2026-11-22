@@ -33,6 +33,18 @@ object TouchEnvironment {
 
     /** Inspect field geometry only. A focused caption does not block buttons elsewhere. */
     fun avoidsInput(service: AutomationAccessibilityService, profile: TouchProfile, stroke: TouchStroke): Boolean {
+        // A progress/toast-like application popup can temporarily take focus. Do not
+        // record a tap through it into the underlying screen: its lifetime varies on replay.
+        val focused = service.windows.firstOrNull { it.isFocused }
+        if (focused != null) {
+            if (focused.type != AccessibilityWindowInfo.TYPE_APPLICATION ||
+                focused.root?.packageName?.toString() != profile.packageName) return false
+            val windowBounds = Rect().also(focused::getBoundsInScreen)
+            if (stroke.points.any {
+                    val point = TouchPolicy.map(it, profile)
+                    !windowBounds.contains(point.first.toInt(), point.second.toInt())
+                }) return false
+        }
         val root = service.currentRoot() ?: return false
         if (root.packageName?.toString() != profile.packageName) return false
         val queue = java.util.ArrayDeque<AccessibilityNodeInfo>().apply { add(root) }
