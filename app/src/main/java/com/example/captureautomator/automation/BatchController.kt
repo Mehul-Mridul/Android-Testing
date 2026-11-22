@@ -46,7 +46,14 @@ object BatchController {
             suspend fun clearRecents(stage: String): Boolean {
                 mutable.value = mutable.value.copy(current = stage)
                 val result = RecentAppsCleanup.clear(service, timing)
-                com.example.captureautomator.util.AndroidDevice.launch(service, service.packageName)
+                // Wait for the launcher to finish removing tasks before starting another one.
+                timing.waitMs(1000)
+                val returned = com.example.captureautomator.util.AndroidDevice.launch(service, service.packageName) &&
+                    UiResolver(service, timing).waitForApp(service.packageName, 5000)
+                if (!returned) {
+                    mutable.value = mutable.value.copy(error = "$stage: could not return to Automator")
+                    return false
+                }
                 if (!result.startsWith("RECENTS_CLEAR_REQUESTED")) {
                     mutable.value = mutable.value.copy(error = "$stage: $result")
                     return false

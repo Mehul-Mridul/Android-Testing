@@ -288,7 +288,7 @@ class ExecutionEngine(
         val pkg = step.packageName ?: preset.apps.firstOrNull()?.packageName
         if (step.kind == ActionKind.LAUNCH_APP) {
             if (pkg == null) return false to "No package specified"
-            val opened = AndroidDevice.launch(context, pkg)
+            val opened = AndroidDevice.launch(service, pkg)
             return (opened && ui.waitForApp(pkg, step.timeoutMs)) to "Launch and wait for $pkg"
         }
         if (step.kind == ActionKind.WAIT_FOR_APP) {
