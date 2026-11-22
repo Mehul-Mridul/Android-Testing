@@ -465,7 +465,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         Heading("Preset editor", if (TouchPolicy.isTouch(current)) "Recorded touches: calibration is required after changing device or layout."
             else "Use semantic selectors; coordinate fallback requires explicit approval.")
         if (TouchPolicy.isTouch(current)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { current = current.copy(requireTouchStart = current.requireTouchStart == false) }, verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(current.requireTouchStart != false, { current = current.copy(requireTouchStart = it) })
                 Text("Check starting screen for each app", style = MaterialTheme.typography.bodySmall)
             }
@@ -474,7 +474,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 Text("Calibrate touch copy")
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable { current = current.copy(clearRecentsAfterRun = current.clearRecentsAfterRun != true) }, verticalAlignment = Alignment.CenterVertically) {
             Checkbox(current.clearRecentsAfterRun == true, { current = current.copy(clearRecentsAfterRun = it) })
             Text("Clear recent apps after a standalone run", style = MaterialTheme.typography.bodySmall)
         }
@@ -706,7 +706,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         }
         LazyColumn {
             items(rows, key = { it.id }) { row ->
-                Row(Modifier.fillMaxWidth().clickable(enabled = !state.running) {
+                Row(Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(enabled = !state.running) {
                     if (!selected.remove(row.id)) selected.add(row.id)
                 }, verticalAlignment = Alignment.CenterVertically) {
                     Checkbox(row.id in selected, onCheckedChange = null)
