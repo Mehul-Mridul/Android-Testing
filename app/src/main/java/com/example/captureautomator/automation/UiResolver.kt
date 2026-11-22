@@ -213,6 +213,8 @@ class UiResolver(private val service: AutomationAccessibilityService,
         if (TouchPolicy.errors(stroke).isNotEmpty()) return false to "TOUCH_INVALID: path rejected"
         timing.waitMs(0)
         if (!ready()) return false to "TOUCH_INCOMPATIBLE: foreground/window changed; no gesture sent"
+        if (!TouchEnvironment.avoidsInput(service, profile, stroke))
+            return false to "TOUCH_INPUT_EXCLUDED: gesture overlaps an editable field"
         val path = Path()
         stroke.points.forEachIndexed { index, point ->
             val (x, y) = TouchPolicy.map(point, profile)
@@ -223,7 +225,8 @@ class UiResolver(private val service: AutomationAccessibilityService,
         val deferred = CompletableDeferred<Boolean>()
         onDispatch()
         currentCoroutineContext().ensureActive()
-        if (!ready()) return false to "TOUCH_INCOMPATIBLE: state changed before dispatch; no gesture sent"
+        if (!ready() || !TouchEnvironment.avoidsInput(service, profile, stroke))
+            return false to "TOUCH_INCOMPATIBLE: window or input field changed before dispatch"
         val dispatched = service.dispatchGesture(description, object : AccessibilityService.GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) { deferred.complete(true) }
             override fun onCancelled(gestureDescription: GestureDescription?) { deferred.complete(false) }

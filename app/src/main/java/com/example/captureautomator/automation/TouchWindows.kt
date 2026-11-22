@@ -62,9 +62,9 @@ internal class TouchWindows(private val service: AutomationAccessibilityService)
                 setOnClickListener { action() }
             }, LinearLayout.LayoutParams(dp(53), dp(44)))
         }
-        val width = minOf(profile.width, dp(if (actions.size > 3) 390 else 355))
+        val width = minOf(profile.width, dp(if (actions.size > 3) 340 else 300))
         val layout = params(width, WindowManager.LayoutParams.WRAP_CONTENT,
-            (lastBarX ?: profile.left).coerceIn(profile.left, profile.left + profile.width - width),
+            (lastBarX ?: (profile.left + (profile.width - width) / 2)).coerceIn(profile.left, profile.left + profile.width - width),
             (lastBarY ?: profile.top).coerceIn(profile.top, maxOf(profile.top, profile.top + profile.height - dp(50))))
         var downX = 0f; var downY = 0f; var originalX = 0; var originalY = 0
         label.setOnTouchListener { _, event ->

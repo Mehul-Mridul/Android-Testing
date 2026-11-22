@@ -476,9 +476,9 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(current.clearRecentsAfterRun == true, { current = current.copy(clearRecentsAfterRun = it) })
-            Text("Clear ALL recent apps after verification", style = MaterialTheme.typography.bodySmall)
+            Text("Clear recent apps after a standalone run", style = MaterialTheme.typography.bodySmall)
         }
-        Text("Returns to Automator first. Cleanup is skipped on Stop or an incomplete app switch.", style = MaterialTheme.typography.bodySmall)
+        Text("Batch manages its own cleanup before and after the sequence. Stop cancels pending actions.", style = MaterialTheme.typography.bodySmall)
         OutlinedTextField(editingName, { editingName = it }, label = { Text("Name") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(editingFolder, { editingFolder = it }, label = { Text("Folder") }, modifier = Modifier.fillMaxWidth())
         Text("Expected ${current.media.photos} photos, ${current.media.videos} videos of ${current.media.videoDurationMs / 1000}s",
@@ -682,6 +682,9 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         Heading("Batch execution", "Select presets in playback order. Start each app on its recorded screen. Batch clears Recents before and after playback.")
         Text("${state.position}/${state.total} ${state.current}")
         if (state.error.isNotBlank()) Text(state.error, color = MaterialTheme.colorScheme.error)
+        state.cleanupDetails.lastOrNull()?.let {
+            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         if (state.running) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 StudioPrimary(onClick = { if (state.paused) BatchController.resume() else BatchController.pause() }) {

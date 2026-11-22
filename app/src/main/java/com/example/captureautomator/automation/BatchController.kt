@@ -17,7 +17,8 @@ data class BatchUiState(
     val position: Int = 0,
     val total: Int = 0,
     val reports: List<ExecutionReport> = emptyList(),
-    val error: String = ""
+    val error: String = "",
+    val cleanupDetails: List<String> = emptyList()
 )
 
 object BatchController {
@@ -46,6 +47,7 @@ object BatchController {
             suspend fun clearRecents(stage: String): Boolean {
                 mutable.value = mutable.value.copy(current = stage)
                 val result = RecentAppsCleanup.clear(service, timing)
+                mutable.value = mutable.value.copy(cleanupDetails = mutable.value.cleanupDetails + "$stage: $result")
                 // Wait for the launcher to finish removing tasks before starting another one.
                 timing.waitMs(1000)
                 val returned = com.example.captureautomator.util.AndroidDevice.launch(service, service.packageName) &&
@@ -54,7 +56,7 @@ object BatchController {
                     mutable.value = mutable.value.copy(error = "$stage: could not return to Automator")
                     return false
                 }
-                if (!result.startsWith("RECENTS_CLEAR_REQUESTED")) {
+                if (!result.startsWith("RECENTS_CLEAR_REQUESTED") && !result.startsWith("RECENTS_ALREADY_EMPTY")) {
                     mutable.value = mutable.value.copy(error = "$stage: $result")
                     return false
                 }
@@ -71,7 +73,7 @@ object BatchController {
                             currentCoroutineContext().ensureActive()
                             while (paused) { delay(150); currentCoroutineContext().ensureActive() }
                         })
-                    val report = runner.execute(preset.copy(clearRecentsAfterRun = false, requireTouchStart = false))
+                    val report = runner.execute(BatchPolicy.forExecution(preset))
                     withContext(NonCancellable) { repository.saveReport(report) }
                     results += report
                     mutable.value = mutable.value.copy(reports = results.toList())
@@ -87,6 +89,8 @@ object BatchController {
                 val file = File(context.filesDir, "batch_${UUID.randomUUID()}.json")
                 withContext(NonCancellable + Dispatchers.IO) {
                     file.writeText(Codec.gson.toJson(results))
+                    File(context.filesDir, "batch-status-" + file.name.removePrefix("batch_")).writeText(
+                        Codec.gson.toJson(mutable.value.copy(reports = results.toList(), running = false)))
                 }
                 mutable.value = mutable.value.copy(running = false, paused = false, reports = results.toList())
                 service.clearIndicator()

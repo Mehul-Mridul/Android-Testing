@@ -52,6 +52,7 @@ object TouchRecorder {
                     val draft = RecordingSession.state.value ?: break
                     if (!draft.active || draft.playbackMode != PlaybackMode.RECORDED_TOUCHES) break
                     if (busy) { hide(); delay(20); continue }
+                    (draft.touchProfiles ?: listOfNotNull(draft.touchProfile)).forEach(TouchEnvironment::bind)
                     val current = draft.apps.firstNotNullOfOrNull { TouchEnvironment.current(service, it.packageName) }
                     if (current == null) {
                         hide(); wasAvailable = false; stable = 0

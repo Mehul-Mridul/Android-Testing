@@ -11,6 +11,7 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.example.captureautomator.core.TouchPolicy
 import com.example.captureautomator.core.TouchProfile
+import com.example.captureautomator.core.TouchStroke
 import com.example.captureautomator.core.TouchViewport
 import com.example.captureautomator.core.TouchViewportPolicy
 import com.example.captureautomator.util.AndroidDevice
@@ -18,6 +19,9 @@ import com.example.captureautomator.util.AndroidDevice
 object TouchEnvironment {
     private data class Anchor(val profile: TouchProfile)
     private val anchors = mutableMapOf<String, Anchor>()
+
+    /** A recorded binding is revalidated against live safe area/configuration before reuse. */
+    fun bind(profile: TouchProfile) { anchors[profile.packageName] = Anchor(profile) }
 
     // Compare the focused window to the bound app area, excluding system insets.
     fun popup(service: AutomationAccessibilityService, profile: TouchProfile): Boolean? {
@@ -27,12 +31,38 @@ object TouchEnvironment {
         return !bounds.contains(Rect(profile.left, profile.top, profile.left + profile.width, profile.top + profile.height))
     }
 
+    /** Inspect field geometry only. A focused caption does not block buttons elsewhere. */
+    fun avoidsInput(service: AutomationAccessibilityService, profile: TouchProfile, stroke: TouchStroke): Boolean {
+        val root = service.currentRoot() ?: return false
+        if (root.packageName?.toString() != profile.packageName) return false
+        val queue = java.util.ArrayDeque<AccessibilityNodeInfo>().apply { add(root) }
+        var visited = 0
+        while (queue.isNotEmpty() && visited++ < 1500) {
+            val node = queue.removeFirst()
+            if (node.isVisibleToUser && (node.isEditable || node.isPassword)) {
+                val bounds = Rect().also(node::getBoundsInScreen)
+                val points = stroke.points.map { TouchPolicy.map(it, profile) }
+                if (points.any { bounds.contains(it.first.toInt(), it.second.toInt()) }) return false
+                for ((a, b) in points.zipWithNext()) {
+                    val pathBounds = Rect(minOf(a.first, b.first).toInt(), minOf(a.second, b.second).toInt(),
+                        maxOf(a.first, b.first).toInt() + 1, maxOf(a.second, b.second).toInt() + 1)
+                    if (Rect.intersects(bounds, pathBounds)) return false
+                }
+            }
+            for (i in 0 until node.childCount) node.getChild(i)?.let(queue::add)
+        }
+        return queue.isEmpty()
+    }
+
     /** Reads package/focus/geometry only. Keyboard and editable fields are deliberately excluded. */
     @Suppress("DEPRECATION")
     fun current(service: AutomationAccessibilityService, pkg: String): TouchProfile? {
         if ((service.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager).isTouchExplorationEnabled) return null
         val windows = service.windows
-        if (windows.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }) return null
+        if (windows.any { window ->
+                window.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD &&
+                    window.root?.isVisibleToUser == true
+            }) return null
         val focused = windows.firstOrNull { it.isFocused }
         val root = if (focused != null) {
             if (focused.type != AccessibilityWindowInfo.TYPE_APPLICATION) return null
@@ -40,8 +70,6 @@ object TouchEnvironment {
             focused.root
         } else service.currentRoot()
         if (root?.packageName?.toString() != pkg || !root.refresh()) return null
-        val input = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-        if (input?.isEditable == true || input?.isPassword == true) return null
         val wm = service.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val metrics = DisplayMetrics().also { wm.defaultDisplay.getRealMetrics(it) }
         val candidates = windows.filter {
@@ -74,7 +102,8 @@ object TouchEnvironment {
             area.left, area.top, area.width(), area.height(), androidSdk = Build.VERSION.SDK_INT)
         val multiWindow = windows.any { window ->
             window.type == AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER ||
-                (window.type == AccessibilityWindowInfo.TYPE_APPLICATION && window.root?.packageName?.toString() != pkg)
+                (window.type == AccessibilityWindowInfo.TYPE_APPLICATION && window.root?.isVisibleToUser == true &&
+                    window.root?.packageName?.toString()?.let { it != pkg } == true)
         }
         val safeViewport = TouchViewport(safe.left, safe.top, safe.width(), safe.height())
         if (multiWindow) anchors.remove(pkg)

@@ -243,6 +243,7 @@ class ExecutionEngine(
 
     private suspend fun prepareTouch(preset: Preset, pkg: String?, timeoutMs: Long, popup: Boolean? = null): Pair<TouchProfile?, String> {
         val binding = TouchPolicy.profile(preset, pkg) ?: return null to "TOUCH_PROFILE_MISSING"
+        TouchEnvironment.bind(binding)
         var current: TouchProfile? = null
         var stable = false
         val deadline = SystemClock.elapsedRealtime() + timeoutMs
