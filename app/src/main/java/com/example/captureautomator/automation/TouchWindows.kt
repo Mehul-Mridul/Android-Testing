@@ -36,7 +36,13 @@ internal class TouchWindows(private val service: AutomationAccessibilityService)
     fun bar(profile: TouchProfile, title: String, actions: List<Pair<String, () -> Unit>>): Pair<View, TextView> {
         val row = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
-            setBackgroundColor(Color.rgb(38, 44, 55))
+            background = android.graphics.drawable.GradientDrawable(
+                android.graphics.drawable.GradientDrawable.Orientation.TL_BR,
+                intArrayOf(Color.rgb(36, 52, 44), Color.rgb(23, 32, 28))).apply {
+                cornerRadius = dp(18).toFloat()
+                setStroke(dp(1), Color.rgb(72, 94, 81))
+            }
+            elevation = dp(5).toFloat()
             setPadding(dp(3), dp(3), dp(3), dp(3))
             contentDescription = "Visible touch controls"
         }
@@ -48,7 +54,10 @@ internal class TouchWindows(private val service: AutomationAccessibilityService)
         row.addView(label, LinearLayout.LayoutParams(0, dp(44), 1f))
         actions.forEach { (text, action) ->
             row.addView(Button(service).apply {
-                this.text = text; textSize = 10f; minWidth = 0; minimumWidth = 0
+                this.text = text; textSize = 10f
+                setTextColor(Color.rgb(12, 38, 27))
+                backgroundTintList = android.content.res.ColorStateList.valueOf(Color.rgb(135, 225, 188))
+                 minWidth = 0; minimumWidth = 0
                 setPadding(dp(5), 0, dp(5), 0)
                 setOnClickListener { action() }
             }, LinearLayout.LayoutParams(dp(53), dp(44)))

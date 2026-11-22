@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+
 package com.example.captureautomator.ui
 
 import android.Manifest
@@ -16,6 +18,14 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,11 +54,29 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
     val execution by ExecutionController.state.collectAsState()
     val batch by BatchController.state.collectAsState()
     val calibration by TouchCalibration.state.collectAsState()
-    val touchStatus by TouchRecorder.status.collectAsState()
+    val appearance = remember { activity.getSharedPreferences("appearance", android.content.Context.MODE_PRIVATE) }
+    var dark by remember { mutableStateOf(appearance.getBoolean("dark", true)) }
     var page by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<Page, String>(
         save = { if (it == Page.EDIT) Page.LIBRARY.name else it.name },
         restore = { Page.valueOf(it) }
     )) { mutableStateOf(Page.HOME) }
+    BackHandler(enabled = page != Page.HOME) { page = if (page == Page.EDIT) Page.LIBRARY else Page.HOME }
+    SideEffect {
+        @Suppress("DEPRECATION")
+        activity.window.statusBarColor = if (dark) android.graphics.Color.rgb(18, 23, 22) else android.graphics.Color.rgb(243, 245, 238)
+        @Suppress("DEPRECATION")
+        activity.window.navigationBarColor = if (dark) android.graphics.Color.rgb(18, 23, 22) else android.graphics.Color.rgb(243, 245, 238)
+        androidx.core.view.WindowCompat.getInsetsController(activity.window, activity.window.decorView).apply {
+            isAppearanceLightStatusBars = !dark
+            isAppearanceLightNavigationBars = !dark
+        }
+    }
+    var installedApps by remember { mutableStateOf<List<AppSpec>?>(null) }
+    LaunchedEffect(page, activity) {
+        if (page == Page.CREATE) {
+            installedApps = withContext(Dispatchers.IO) { AndroidDevice.installedLaunchableApps(activity) }
+        }
+    }
     var edit by remember { mutableStateOf<Preset?>(null) }
     var notice by remember { mutableStateOf("") }
     var exportData by remember { mutableStateOf("") }
@@ -92,25 +120,31 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
     LaunchedEffect(draft?.active) {
         if (draft != null && draft?.active == false && page == Page.HOME) page = Page.RECORD
     }
-    MaterialTheme {
+    StudioTheme(dark) {
         Scaffold(topBar = {
-            TopAppBar(title = { Text("3P Capture Automator") }, navigationIcon = {
-                if (page != Page.HOME) TextButton(onClick = { page = Page.HOME }) { Text("‹ Home") }
+            TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background.copy(alpha = .96f)), title = { Text("3P Automator", style = MaterialTheme.typography.titleMedium) }, navigationIcon = {
+                if (page != Page.HOME) StudioQuiet(onClick = { page = Page.HOME }) { Text("‹ Home") }
             })
         }, bottomBar = {
             if (notice.isNotBlank()) Surface(tonalElevation = 3.dp) {
                 Row(Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(notice, Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-                    TextButton(onClick = { notice = "" }) { Text("Dismiss") }
+                    StudioQuiet(onClick = { notice = "" }) { Text("Dismiss") }
                 }
             }
         }) { padding ->
-            Column(Modifier.fillMaxSize().padding(padding).padding(horizontal = 14.dp)) {
-                when (page) {
+            StudioBackdrop(Modifier.fillMaxSize().padding(padding)) {
+                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                AnimatedContent(targetState = page, label = "Screen",
+                    transitionSpec = {
+                        fadeIn(tween(160)).togetherWith(fadeOut(tween(90)))
+                    }, modifier = Modifier.widthIn(max = 1040.dp).fillMaxSize().imePadding().padding(horizontal = 20.dp)) { destination ->
+                Column(Modifier.fillMaxSize()) {
+                when (destination) {
                     Page.HOME -> HomePage(draft?.active == true, execution, batch,
                         go = { page = it }, onResumeRecord = { page = Page.RECORD })
                     Page.CREATE -> CreatePage(
-                        activity,
+                        activity, installedApps,
                         onPermission = ::requestPermissions,
                         onBegin = { name, apps, media, mode ->
                             val service = AutomationAccessibilityService.instance
@@ -180,8 +214,13 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
                         if (presets.size == selected.size) BatchController.run(activity, presets, repository, stopOnFail)
                         else notice = "A selected preset could not be loaded"
                     })
-                    Page.SETTINGS -> SettingsPage(activity, onPermission = ::requestPermissions)
+                    Page.SETTINGS -> SettingsPage(activity, dark, { value ->
+                        dark = value; appearance.edit().putBoolean("dark", value).apply()
+                    }, onPermission = ::requestPermissions)
                     Page.DEVICE -> DevicePage(activity)
+                }
+                }
+                }
                 }
             }
         }
@@ -193,35 +232,59 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         Manifest.permission.POST_NOTIFICATIONS) == android.content.pm.PackageManager.PERMISSION_GRANTED
 
 @Composable private fun Heading(title: String, subtitle: String = "") {
-    Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-    if (subtitle.isNotBlank()) Text(subtitle, style = MaterialTheme.typography.bodySmall)
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(18.dp))
+    Text(title, style = MaterialTheme.typography.headlineLarge)
+    if (subtitle.isNotBlank()) {
+        Spacer(Modifier.height(8.dp))
+        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+    Spacer(Modifier.height(22.dp))
 }
 
 @Composable private fun MainNav(label: String, onClick: () -> Unit) {
-    ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-        Text(label, Modifier.padding(18.dp), style = MaterialTheme.typography.titleMedium)
+    ElevatedCard(onClick = onClick, modifier = Modifier.fillMaxWidth().padding(vertical = 5.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 1.dp)) {
+        Row(Modifier.fillMaxWidth().padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+            StudioMark(label)
+            Spacer(Modifier.width(14.dp))
+            Text(label, Modifier.weight(1f), style = MaterialTheme.typography.titleMedium)
+            Text("↗", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
+        }
     }
 }
 
 @Composable private fun HomePage(recording: Boolean, execution: ExecutionUiState,
                                  batch: BatchUiState, go: (Page) -> Unit, onResumeRecord: () -> Unit) {
     Column(Modifier.verticalScroll(rememberScrollState())) {
-        Heading("QA camera workflow automation", "Record → review → save → replay → verify")
+        Spacer(Modifier.height(20.dp))
+        Text("YOUR AUTOMATION STUDIO", color = MaterialTheme.colorScheme.secondary, style = MaterialTheme.typography.labelLarge)
+        Spacer(Modifier.height(12.dp))
+        Text("Make every\nmove count.", style = MaterialTheme.typography.displaySmall)
+        Spacer(Modifier.height(12.dp))
+        Text("Record a touch sequence. Replay with confidence.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.height(24.dp))
+        StudioPanel(Modifier.fillMaxWidth()) {
+            Text("Touch recording", style = MaterialTheme.typography.titleLarge)
+            Text("Capture a sequence in one app.",
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+            StudioPrimary(onClick = { go(Page.CREATE) }, modifier = Modifier.fillMaxWidth()) { Text("Record new automation") }
+        }
+        Spacer(Modifier.height(18.dp))
         if (recording) {
             Card { Column(Modifier.padding(12.dp)) {
                 Text("Recording active", fontWeight = FontWeight.Bold)
-                Button(onClick = onResumeRecord) { Text("Open recording controls") }
+                StudioPrimary(onClick = onResumeRecord) { Text("Open recording controls") }
             } }
         }
         if (execution.running || execution.report != null || execution.error.isNotBlank()) {
             ElevatedCard(Modifier.fillMaxWidth()) { Column(Modifier.padding(12.dp)) {
                 Text(if (execution.running) "RUNNING: ${execution.presetName}" else "Latest execution")
                 Text("Step ${execution.stepIndex}/${execution.totalSteps}: ${execution.currentStep}")
-                if (execution.running) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = { if (execution.paused) ExecutionController.resume()
+                if (execution.running) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    StudioOutline(onClick = { if (execution.paused) ExecutionController.resume()
                         else ExecutionController.pause() }) { Text(if (execution.paused) "Resume" else "Pause") }
-                    OutlinedButton(onClick = ExecutionController::stop) { Text("Stop") }
+                    StudioOutline(onClick = ExecutionController::stop) { Text("Stop") }
                 }
                 execution.report?.let { Text("Result: ${it.outcome} | ${it.media.photosFound} photos, ${it.media.videosFound} videos") }
                 if (execution.error.isNotBlank()) Text(execution.error)
@@ -229,20 +292,31 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
             Spacer(Modifier.height(8.dp))
         }
         if (batch.running) Text("Batch running: ${batch.position}/${batch.total} — ${batch.current}")
-        MainNav("Record new automation", { go(Page.CREATE) })
-        MainNav("Saved presets", { go(Page.LIBRARY) })
-        MainNav("Run automation (select a preset)", { go(Page.LIBRARY) })
-        MainNav("Batch execution", { go(Page.BATCH) })
-        MainNav("Execution history", { go(Page.HISTORY) })
+        BoxWithConstraints {
+            if (maxWidth >= 600.dp) Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                Column(Modifier.weight(1f)) {
+                    MainNav("Saved presets", { go(Page.LIBRARY) })
+                    MainNav("Execution history", { go(Page.HISTORY) })
+                }
+                Column(Modifier.weight(1f)) {
+                    MainNav("Batch execution", { go(Page.BATCH) })
+                    MainNav("Settings and permissions", { go(Page.SETTINGS) })
+                }
+            } else Column {
+                MainNav("Saved presets", { go(Page.LIBRARY) })
+                MainNav("Batch execution", { go(Page.BATCH) })
+                MainNav("Execution history", { go(Page.HISTORY) })
+                MainNav("Settings and permissions", { go(Page.SETTINGS) })
+            }
+        }
         MainNav("Device information", { go(Page.DEVICE) })
-        MainNav("Settings and permissions", { go(Page.SETTINGS) })
         Spacer(Modifier.height(12.dp))
         Text("Only explicitly selected apps are observed during a visible recording session.",
             style = MaterialTheme.typography.bodySmall)
     }
 }
 
-@Composable private fun CreatePage(activity: MainActivity, onPermission: () -> Unit,
+@Composable private fun CreatePage(activity: MainActivity, installedApps: List<AppSpec>?, onPermission: () -> Unit,
                                    onBegin: (String, List<AppSpec>, MediaExpectation, PlaybackMode) -> Unit) {
     var name by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
@@ -250,7 +324,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     var videoCount by rememberSaveable { mutableStateOf("0") }
     var durationSeconds by rememberSaveable { mutableStateOf("5") }
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
-    val apps = remember { AndroidDevice.installedLaunchableApps(activity) }
+    val apps = installedApps.orEmpty()
     Column {
         LazyColumn(modifier = Modifier.weight(1f)) {
             item {
@@ -263,9 +337,13 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                     OutlinedTextField(videoCount, { videoCount = it }, label = { Text("Videos") }, modifier = Modifier.weight(1f))
                     OutlinedTextField(durationSeconds, { durationSeconds = it }, label = { Text("Seconds") }, modifier = Modifier.weight(1f))
                 }
-                OutlinedButton(onClick = onPermission) { Text("Grant media + notification permissions") }
+                StudioOutline(onClick = onPermission) { Text("Grant media + notification permissions") }
                 OutlinedTextField(query, { query = it }, label = { Text("Find installed application") },
                     modifier = Modifier.fillMaxWidth(), singleLine = true)
+                if (installedApps == null) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text("Loading installed apps…", style = MaterialTheme.typography.bodySmall)
+                }
                 Text("Selected: " + (apps.find { it.packageName == selected }?.displayName ?: "None"))
             }
             items(apps.filter { it.displayName.contains(query, true) || it.packageName.contains(query, true) }, key = { it.packageName }) { app ->
@@ -280,8 +358,8 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 }
             }
         }
-        Button(onClick = {
-            val chosen = listOf(apps.singleOrNull { it.packageName == selected } ?: return@Button)
+        StudioPrimary(onClick = {
+            val chosen = listOf(apps.singleOrNull { it.packageName == selected } ?: return@StudioPrimary)
             onBegin(name, chosen, MediaExpectation(photoCount.toIntOrNull() ?: 2,
                 videoCount.toIntOrNull() ?: 1, (durationSeconds.toLongOrNull() ?: 5L) * 1000), PlaybackMode.RECORDED_TOUCHES)
         }, enabled = name.isNotBlank() && selected != null, modifier = Modifier.fillMaxWidth()) {
@@ -309,11 +387,11 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         }
         draft.recordingIssue?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Text("${draft.steps.size} observed steps · ${draft.apps.joinToString { it.displayName }}")
-        if (draft.active) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = onPause) { Text(if (draft.paused) "Resume" else "Pause") }
-            Button(onClick = onStop) { Text("Stop") }
-        } else Button(onClick = onReview) { Text("Review and edit captured steps") }
-        OutlinedButton(onClick = onDiscard) { Text("Discard draft") }
+        if (draft.active) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            StudioOutline(onClick = onPause) { Text(if (draft.paused) "Resume" else "Pause") }
+            StudioPrimary(onClick = onStop) { Text("Stop") }
+        } else StudioPrimary(onClick = onReview) { Text("Review and edit captured steps") }
+        StudioOutline(onClick = onDiscard) { Text("Discard draft") }
         LazyColumn {
             itemsIndexed(draft.steps) { index, step ->
                 Column(Modifier.padding(vertical = 6.dp)) {
@@ -334,24 +412,31 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     var query by remember { mutableStateOf("") }
     var deleteCandidate by remember { mutableStateOf<PresetRow?>(null) }
     Column {
-        Heading("Preset library", "Persistent Room storage · JSON import/export")
+        Heading("Your presets", "Recorded once. Ready for the next run.")
         OutlinedTextField(query, { query = it }, modifier = Modifier.fillMaxWidth(),
             label = { Text("Search presets") })
-        OutlinedButton(onClick = onImport) { Text("Import JSON") }
+        StudioOutline(onClick = onImport) { Text("Import JSON") }
+        if (rows.isEmpty()) StudioPanel(Modifier.fillMaxWidth()) {
+            Text("Your next workflow starts here", style = MaterialTheme.typography.titleMedium)
+            Text("Record a sequence from Home or import a saved preset.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (rows.isNotEmpty() && rows.none { it.name.contains(query, true) || it.folder.contains(query, true) }) {
+            Text("No presets match your search.", color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(vertical = 16.dp))
+        }
         LazyColumn {
-            items(rows.filter { it.name.contains(query, true) || it.folder.contains(query, true) }) { row ->
+            items(rows.filter { it.name.contains(query, true) || it.folder.contains(query, true) }, key = { it.id }) { row ->
                 ElevatedCard(Modifier.fillMaxWidth().padding(bottom = 9.dp)) {
                     Column(Modifier.padding(12.dp)) {
                         Text(row.name, fontWeight = FontWeight.Bold)
                         Text(row.folder, style = MaterialTheme.typography.bodySmall)
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Button(onClick = { onRun(row) }) { Text("Run") }
-                            OutlinedButton(onClick = { onEdit(row) }) { Text("Edit") }
-                            OutlinedButton(onClick = { onDuplicate(row) }) { Text("Copy") }
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            StudioPrimary(onClick = { onRun(row) }) { Text("Run") }
+                            StudioOutline(onClick = { onEdit(row) }) { Text("Edit") }
+                            StudioOutline(onClick = { onDuplicate(row) }) { Text("Copy") }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            TextButton(onClick = { onExport(row) }) { Text("Export") }
-                            TextButton(onClick = { deleteCandidate = row }) { Text("Delete") }
+                            StudioQuiet(onClick = { onExport(row) }) { Text("Export") }
+                            StudioQuiet(onClick = { deleteCandidate = row }) { Text("Delete") }
                         }
                     }
                 }
@@ -360,9 +445,9 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     }
     deleteCandidate?.let { row ->
         AlertDialog(onDismissRequest = { deleteCandidate = null }, title = { Text("Delete preset?") },
-            text = { Text(row.name) }, confirmButton = { TextButton(onClick = {
+            text = { Text(row.name) }, confirmButton = { StudioQuiet(onClick = {
                 onDelete(row); deleteCandidate = null
-            }) { Text("Delete") } }, dismissButton = { TextButton(onClick = { deleteCandidate = null }) { Text("Cancel") } })
+            }) { Text("Delete") } }, dismissButton = { StudioQuiet(onClick = { deleteCandidate = null }) { Text("Cancel") } })
     }
 }
 
@@ -375,7 +460,8 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     var repairError by remember { mutableStateOf("") }
     val validation = PresetValidation.errors(current.copy(name = editingName, folder = editingFolder))
     val playbackIssues = PresetValidation.playbackErrors(current)
-    Column {
+    LazyColumn {
+        item {
         Heading("Preset editor", if (TouchPolicy.isTouch(current)) "Recorded touches: calibration is required after changing device or layout."
             else "Use semantic selectors; coordinate fallback requires explicit approval.")
         if (TouchPolicy.isTouch(current)) {
@@ -384,7 +470,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 Text("Check starting screen for each app", style = MaterialTheme.typography.bodySmall)
             }
             Text("Coordinates cannot recognise the starting screen. Prepare the app before immediate replay.", style = MaterialTheme.typography.bodySmall)
-            OutlinedButton(onClick = { onCalibrate(current.copy(name = editingName, folder = editingFolder)) }) {
+            StudioOutline(onClick = { onCalibrate(current.copy(name = editingName, folder = editingFolder)) }) {
                 Text("Calibrate touch copy")
             }
         }
@@ -407,14 +493,14 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         }
         if (playbackIssues.isNotEmpty()) Text("Playback blocked: ${playbackIssues.first()}", color = MaterialTheme.colorScheme.error)
         if (validation.isNotEmpty()) Text("Validation: ${validation.first()}", color = MaterialTheme.colorScheme.error)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = { onSave(current.copy(name = editingName, folder = editingFolder,
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            StudioPrimary(onClick = { onSave(current.copy(name = editingName, folder = editingFolder,
                 modifiedAtEpochMs = System.currentTimeMillis())) }, enabled = validation.isEmpty()) { Text("Save preset changes") }
-            OutlinedButton(onClick = { addNew = true }) { Text("Add step") }
-            TextButton(onClick = onCancel) { Text("Cancel") }
+            StudioOutline(onClick = { addNew = true }) { Text("Add step") }
+            StudioQuiet(onClick = onCancel) { Text("Cancel") }
         }
         if (!TouchPolicy.isTouch(current) && current.apps.size == 1 && current.apps.single().packageName == CameraPolicy.PACKAGE) {
-            OutlinedButton(onClick = {
+            StudioOutline(onClick = {
                 runCatching { CameraPolicy.repairCopy(current) }.onSuccess(onSave)
                     .onFailure { repairError = it.message.orEmpty() }
             }) { Text("Save camera repair copy") }
@@ -423,7 +509,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         }
         Text("Unreviewed: ${current.steps.count { it.needsReview }}. Known Camera captures do not require repeated review. Save preset changes after editing.",
             style = MaterialTheme.typography.bodySmall)
-        LazyColumn {
+        }
             itemsIndexed(current.steps) { index, step ->
                 ElevatedCard(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                     Column(Modifier.padding(10.dp)) {
@@ -431,25 +517,24 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                         Text("${step.kind} · ${step.packageName ?: "default app"}${if (step.needsReview) " · REVIEW" else ""}",
                             style = MaterialTheme.typography.bodySmall)
                         Row(horizontalArrangement = Arrangement.spacedBy(3.dp)) {
-                            TextButton(onClick = { selectedIndex = index }) { Text("Edit") }
-                            TextButton(onClick = {
+                            StudioQuiet(onClick = { selectedIndex = index }) { Text("Edit") }
+                            StudioQuiet(onClick = {
                                 if (index > 0) current = current.copy(steps = current.steps.toMutableList().apply {
                                     add(index - 1, removeAt(index))
                                 })
                             }, enabled = index > 0) { Text("↑") }
-                            TextButton(onClick = {
+                            StudioQuiet(onClick = {
                                 if (index < current.steps.lastIndex) current = current.copy(steps = current.steps.toMutableList().apply {
                                     add(index + 1, removeAt(index))
                                 })
                             }, enabled = index < current.steps.lastIndex) { Text("↓") }
-                            TextButton(onClick = { current = current.copy(steps = current.steps.filterIndexed { i, _ -> i != index }) }) {
+                            StudioQuiet(onClick = { current = current.copy(steps = current.steps.filterIndexed { i, _ -> i != index }) }) {
                                 Text("Remove")
                             }
                         }
                     }
                 }
             }
-        }
     }
     val dialogStep = if (addNew) AutomationStep(label = "Wait for camera", kind = ActionKind.WAIT_MS,
         waitMs = 1000L, packageName = current.apps.firstOrNull()?.packageName)
@@ -490,7 +575,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 OutlinedTextField(label, { label = it }, label = { Text("Action description") })
                 Box {
-                    OutlinedButton(onClick = { expanded = true }) { Text(kind.name) }
+                    StudioOutline(onClick = { expanded = true }) { Text(kind.name) }
                     DropdownMenu(expanded, onDismissRequest = { expanded = false }) {
                         ActionKind.entries.forEach { option ->
                             DropdownMenuItem(text = { Text(option.name) }, onClick = { kind = option; label = CameraPolicy.label(option); expanded = false })
@@ -527,7 +612,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 OutlinedTextField(timeoutMs, { timeoutMs = it }, label = { Text("Timeout milliseconds") })
                 OutlinedTextField(attempts, { attempts = it }, label = { Text("Max attempts") })
             }
-        }, confirmButton = { TextButton(onClick = {
+        }, confirmButton = { StudioQuiet(onClick = {
             val loc = UiLocator(rid.ifBlank { null }, desc.ifBlank { null }, text.ifBlank { null },
                 clazz.ifBlank { null }, x.toFloatOrNull(), y.toFloatOrNull(),
                 ex.toFloatOrNull(), ey.toFloatOrNull(), useCoords)
@@ -544,15 +629,19 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 authorizedTestText = authorizedText.ifBlank { null },
                 interActionDelayMs = recordedDelay.toLongOrNull() ?: -1,
                 classificationUncertain = false, needsReview = requiresLocator && !identified))
-        }) { Text("Apply step changes") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } })
+        }) { Text("Apply step changes") } }, dismissButton = { StudioQuiet(onClick = onDismiss) { Text("Cancel") } })
 }
 
 @Composable private fun HistoryPage(rows: List<ExecutionRow>) {
     var selected by remember { mutableStateOf<ExecutionReport?>(null) }
     Column {
-        Heading("Execution history", "Persisted reports with step-level evidence")
+        Heading("Run history", "Every result, with its capture evidence.")
+        if (rows.isEmpty()) StudioPanel {
+            Text("No runs yet", style = MaterialTheme.typography.titleMedium)
+            Text("Play a saved preset to see its verified result here.")
+        }
         LazyColumn {
-            items(rows) { row ->
+            items(rows, key = { it.id }) { row ->
                 ElevatedCard(Modifier.fillMaxWidth().padding(vertical = 5.dp).clickable {
                     selected = runCatching { Codec.gson.fromJson(row.reportJson, ExecutionReport::class.java) }.getOrNull()
                 }) {
@@ -581,7 +670,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                     Text(step.message, style = MaterialTheme.typography.bodySmall)
                     if (step.screenshotFile != null) Text("Diagnostic: ${step.screenshotFile}")
                 }
-            } }, confirmButton = { TextButton(onClick = { selected = null }) { Text("Close") } })
+            } }, confirmButton = { StudioQuiet(onClick = { selected = null }) { Text("Close") } })
     }
 }
 
@@ -594,18 +683,18 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         Text("${state.position}/${state.total} ${state.current}")
         if (state.error.isNotBlank()) Text(state.error, color = MaterialTheme.colorScheme.error)
         if (state.running) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { if (state.paused) BatchController.resume() else BatchController.pause() }) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                StudioPrimary(onClick = { if (state.paused) BatchController.resume() else BatchController.pause() }) {
                     Text(if (state.paused) "Resume" else "Pause")
                 }
-                OutlinedButton(onClick = BatchController::stop) { Text("Stop") }
+                StudioOutline(onClick = BatchController::stop) { Text("Stop") }
             }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Checkbox(stopOnFail, { stopOnFail = it })
                 Text("Stop batch when a preset fails or is unverifiable")
             }
-            Button(onClick = { onRun(selected.toList(), stopOnFail) }, enabled = selected.isNotEmpty()) {
+            StudioPrimary(onClick = { onRun(selected.toList(), stopOnFail) }, enabled = selected.isNotEmpty()) {
                 Text("Start prepared batch (${selected.size})")
             }
         }
@@ -626,15 +715,24 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     }
 }
 
-@Composable private fun SettingsPage(activity: MainActivity, onPermission: () -> Unit) {
+@Composable private fun SettingsPage(activity: MainActivity, dark: Boolean, onDark: (Boolean) -> Unit, onPermission: () -> Unit) {
     val preferences = remember { activity.getSharedPreferences("automation", android.content.Context.MODE_PRIVATE) }
     var screenshots by remember { mutableStateOf(preferences.getBoolean("diagnostic_screenshots", false)) }
-    Column(Modifier.verticalScroll(rememberScrollState())) {
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Heading("Settings & permissions")
-        Button(onClick = { activity.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }) {
+        StudioPanel(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Dark appearance", style = MaterialTheme.typography.titleMedium)
+                    Text("Choose the studio lighting.", style = MaterialTheme.typography.bodySmall)
+                }
+                Switch(dark, onDark)
+            }
+        }
+        StudioOutline(onClick = { activity.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }) {
             Text("Open Android Accessibility settings")
         }
-        Button(onClick = onPermission) { Text("Request full photo/video and notification access") }
+        StudioPrimary(onClick = onPermission) { Text("Request full photo/video and notification access") }
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(screenshots, { new ->
                 screenshots = new
@@ -651,13 +749,28 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
 @Composable private fun DevicePage(activity: MainActivity) {
     val d = remember { AndroidDevice.profile(activity) }
     val media = remember { MediaVerifier(activity) }
-    Column {
+    Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Heading("Device information")
+        StudioPanel(Modifier.fillMaxWidth()) {
         Text("Manufacturer: ${d.manufacturer}")
         Text("Model: ${d.model}")
         Text("Android API: ${d.androidSdk}")
         Text("Display: ${d.widthPx} × ${d.heightPx}, density ${d.densityDpi} dpi")
         Text("Accessibility service: ${if (AutomationAccessibilityService.instance != null) "Connected" else "Not connected"}")
         Text("Full shared media access: ${if (media.fullMediaPermission()) "Granted" else "Missing / partial"}")
+        }
     }
 }
+
+
+@Composable private fun StudioPrimary(onClick: () -> Unit, modifier: Modifier = Modifier,
+    enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
+    StudioButton(onClick, modifier, enabled, content = content)
+
+@Composable private fun StudioOutline(onClick: () -> Unit, modifier: Modifier = Modifier,
+    enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
+    StudioButton(onClick, modifier, enabled, outlined = true, content = content)
+
+@Composable private fun StudioQuiet(onClick: () -> Unit, modifier: Modifier = Modifier,
+    enabled: Boolean = true, content: @Composable RowScope.() -> Unit) =
+    StudioButton(onClick, modifier, enabled, quiet = true, content = content)
