@@ -53,39 +53,39 @@ object TouchEnvironment {
         val area = viewport?.let { Rect(it.left, it.top, it.left + it.width, it.top + it.height) }
             ?: Rect().also(root::getBoundsInScreen)
         if (!area.intersect(0, 0, metrics.widthPixels, metrics.heightPixels)) return null
+        val safe = Rect(0, 0, metrics.widthPixels, metrics.heightPixels)
         if (Build.VERSION.SDK_INT >= 30) {
             val insets = wm.currentWindowMetrics.windowInsets.getInsetsIgnoringVisibility(
                 WindowInsets.Type.systemBars() or WindowInsets.Type.displayCutout())
-            if (!area.intersect(insets.left, insets.top, metrics.widthPixels - insets.right,
-                    metrics.heightPixels - insets.bottom)) return null
+            safe.set(insets.left, insets.top, metrics.widthPixels - insets.right, metrics.heightPixels - insets.bottom)
         } else {
             fun dimension(name: String): Int {
                 val id = service.resources.getIdentifier(name, "dimen", "android")
                 return if (id == 0) 0 else service.resources.getDimensionPixelSize(id)
             }
-            if (!area.intersect(0, dimension("status_bar_height"), metrics.widthPixels,
-                    metrics.heightPixels - dimension("navigation_bar_height"))) return null
+            safe.set(0, dimension("status_bar_height"), metrics.widthPixels,
+                metrics.heightPixels - dimension("navigation_bar_height"))
         }
+        if (!area.intersect(safe)) return null
         if (area.width() < 100 || area.height() < 100) return null
         val profile = TouchProfile(pkg, AndroidDevice.version(service, pkg), Build.MANUFACTURER, Build.MODEL,
             metrics.widthPixels, metrics.heightPixels, wm.defaultDisplay.rotation, metrics.densityDpi,
             service.resources.configuration.fontScale, service.resources.configuration.locales.toLanguageTags(),
             area.left, area.top, area.width(), area.height(), androidSdk = Build.VERSION.SDK_INT)
-        val anchor = anchors[pkg]
-        if (anchor != null) {
-            val base = anchor.profile
-            val restored = profile.copy(left = base.left, top = base.top, width = base.width, height = base.height)
-            if (TouchPolicy.compatibility(base, restored).isEmpty() && (TouchViewportPolicy.isInsetDialog(
-                    TouchViewport(base.left, base.top, base.width, base.height),
-                    TouchViewport(profile.left, profile.top, profile.width, profile.height)) ||
-                    (profile.left == base.left && profile.width == base.width && profile.top > base.top &&
-                        profile.top + profile.height == base.top + base.height &&
-                        windows.none { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.root?.packageName?.toString() != pkg }))) return restored
+        val multiWindow = windows.any { window ->
+            window.type == AccessibilityWindowInfo.TYPE_SPLIT_SCREEN_DIVIDER ||
+                (window.type == AccessibilityWindowInfo.TYPE_APPLICATION && window.root?.packageName?.toString() != pkg)
         }
-        // Only establish an app anchor from an app occupying the complete safe display area.
-        // Dialog-only initial screens still work, but cannot redefine an existing full-app binding.
-        if (profile.width == metrics.widthPixels && profile.height > metrics.heightPixels * .75)
-            anchors[pkg] = Anchor(profile)
+        val safeViewport = TouchViewport(safe.left, safe.top, safe.width(), safe.height())
+        if (multiWindow) anchors.remove(pkg)
+        val base = anchors[pkg]?.profile
+        if (base != null && TouchViewportPolicy.canReuseAnchor(
+                TouchViewport(base.left, base.top, base.width, base.height), safeViewport,
+                TouchViewport(profile.left, profile.top, profile.width, profile.height), multiWindow)) {
+            val restored = profile.copy(left = base.left, top = base.top, width = base.width, height = base.height)
+            if (TouchPolicy.compatibility(base, restored).isEmpty()) return restored
+        }
+        if (!multiWindow && area == safe) anchors[pkg] = Anchor(profile)
         return profile
     }
 }

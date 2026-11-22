@@ -144,4 +144,20 @@ class TouchPolicyTest {
         }
     }
 
+    @Test fun `Galaxy landscape navigation and taskbar leave a smaller usable width and height`() {
+        val safe = TouchViewport(80, 48, 2480, 1456)
+        val sheet = TouchViewport(80, 1000, 2480, 504)
+        assertTrue(TouchViewportPolicy.canReuseAnchor(safe, safe, sheet, false))
+        assertFalse(TouchViewportPolicy.canReuseAnchor(safe, safe, sheet, true))
+        assertFalse(TouchViewportPolicy.canReuseAnchor(safe, safe.copy(left = 0, width = 2560), sheet, false))
+    }
+
+    @Test fun `folding or moving a floating pane invalidates a full display anchor`() {
+        val folded = TouchViewport(0, 72, 904, 2190)
+        val unfolded = TouchViewport(0, 72, 1856, 1970)
+        val dialog = TouchViewport(140, 520, 620, 440)
+        assertTrue(TouchViewportPolicy.canReuseAnchor(folded, folded, dialog, false))
+        assertFalse(TouchViewportPolicy.canReuseAnchor(folded, unfolded, dialog, false))
+        assertFalse(TouchViewportPolicy.canReuseAnchor(folded, folded, dialog, true))
+    }
 }

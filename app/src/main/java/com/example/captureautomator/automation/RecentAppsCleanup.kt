@@ -20,7 +20,7 @@ object RecentAppsCleanup {
             if (pkg !in setOf("com.android.systemui", "com.android.launcher", "com.android.launcher3",
                     "com.bbk.launcher2", "com.vivo.launcher", "com.sec.android.app.launcher",
                     "com.miui.home", "com.google.android.apps.nexuslauncher", "com.oplus.launcher")) continue
-            val matches = mutableListOf<AccessibilityNodeInfo>()
+            val matches = mutableSetOf<AccessibilityNodeInfo>()
             val queue = java.util.ArrayDeque<AccessibilityNodeInfo>().apply { add(root) }
             var count = 0
             while (queue.isNotEmpty() && count++ < 1500) {
@@ -29,9 +29,16 @@ object RecentAppsCleanup {
                 val label = (node.contentDescription ?: node.text)?.toString()?.trim()?.lowercase()
                 val vivoClean = pkg == "com.android.launcher3" && id == "action_clean" &&
                     root.findAccessibilityNodeInfosByViewId("$pkg:id/overview_panel").any { it.isVisibleToUser }
-                if (node.isVisibleToUser && node.isEnabled && node.isClickable &&
+                if (node.packageName?.toString() == pkg && node.isVisibleToUser && node.isEnabled &&
                     (vivoClean || id in setOf("clear_all", "clear_all_button", "clearAnimView", "clear_button") ||
-                        label in setOf("clear all", "close all", "clear all apps", "close all apps"))) matches += node
+                        label in setOf("clear all", "close all", "clear all apps", "close all apps"))) {
+                    // One UI can expose a text label inside its clickable button.
+                    val button = if (node.isClickable) node else node.parent?.takeIf {
+                        it.packageName?.toString() == pkg && it.isEnabled && it.isVisibleToUser && it.isClickable &&
+                            it.childCount == 1
+                    }
+                    if (button != null) matches += button
+                }
                 for (i in 0 until node.childCount) node.getChild(i)?.let(queue::add)
             }
             if (matches.size > 1) return "RECENTS_UNCERTAIN: multiple clear controls; close manually"

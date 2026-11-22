@@ -16,6 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -44,7 +45,10 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
     val batch by BatchController.state.collectAsState()
     val calibration by TouchCalibration.state.collectAsState()
     val touchStatus by TouchRecorder.status.collectAsState()
-    var page by remember { mutableStateOf(Page.HOME) }
+    var page by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<Page, String>(
+        save = { if (it == Page.EDIT) Page.LIBRARY.name else it.name },
+        restore = { Page.valueOf(it) }
+    )) { mutableStateOf(Page.HOME) }
     var edit by remember { mutableStateOf<Preset?>(null) }
     var notice by remember { mutableStateOf("") }
     var exportData by remember { mutableStateOf("") }
@@ -240,28 +244,30 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
 
 @Composable private fun CreatePage(activity: MainActivity, onPermission: () -> Unit,
                                    onBegin: (String, List<AppSpec>, MediaExpectation, PlaybackMode) -> Unit) {
-    var name by remember { mutableStateOf("") }
-    var query by remember { mutableStateOf("") }
-    var photoCount by remember { mutableStateOf("1") }
-    var videoCount by remember { mutableStateOf("0") }
-    var durationSeconds by remember { mutableStateOf("5") }
-    var selected by remember { mutableStateOf<String?>(null) }
+    var name by rememberSaveable { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
+    var photoCount by rememberSaveable { mutableStateOf("1") }
+    var videoCount by rememberSaveable { mutableStateOf("0") }
+    var durationSeconds by rememberSaveable { mutableStateOf("5") }
+    var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val apps = remember { AndroidDevice.installedLaunchableApps(activity) }
     Column {
-        Heading("New touch recording", "Choose one app. Use Batch to play several presets in sequence.")
-        OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Preset name") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true)
-        Spacer(Modifier.height(6.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            OutlinedTextField(photoCount, { photoCount = it }, label = { Text("Photos") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(videoCount, { videoCount = it }, label = { Text("Videos") }, modifier = Modifier.weight(1f))
-            OutlinedTextField(durationSeconds, { durationSeconds = it }, label = { Text("Seconds") }, modifier = Modifier.weight(1f))
-        }
-        OutlinedButton(onClick = onPermission) { Text("Grant media + notification permissions") }
-        OutlinedTextField(query, { query = it }, label = { Text("Find installed application") },
-            modifier = Modifier.fillMaxWidth(), singleLine = true)
-        Text("Selected: " + (apps.find { it.packageName == selected }?.displayName ?: "None"))
         LazyColumn(modifier = Modifier.weight(1f)) {
+            item {
+                Heading("New touch recording", "Choose one app. Use Batch to play several presets in sequence.")
+                OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Preset name") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    OutlinedTextField(photoCount, { photoCount = it }, label = { Text("Photos") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(videoCount, { videoCount = it }, label = { Text("Videos") }, modifier = Modifier.weight(1f))
+                    OutlinedTextField(durationSeconds, { durationSeconds = it }, label = { Text("Seconds") }, modifier = Modifier.weight(1f))
+                }
+                OutlinedButton(onClick = onPermission) { Text("Grant media + notification permissions") }
+                OutlinedTextField(query, { query = it }, label = { Text("Find installed application") },
+                    modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Text("Selected: " + (apps.find { it.packageName == selected }?.displayName ?: "None"))
+            }
             items(apps.filter { it.displayName.contains(query, true) || it.packageName.contains(query, true) }, key = { it.packageName }) { app ->
                 Row(Modifier.fillMaxWidth().clickable {
                     selected = if (selected == app.packageName) null else app.packageName
