@@ -21,6 +21,7 @@ class ExecutionEngine(
     private val ui = UiResolver(service, timing)
     private val camera = CameraUi(service, timing)
     private var lastMediaScan: MediaResult? = null
+    private var previousTouchEnd: Long? = null
     private val touchStartAccepted = mutableSetOf<String>()
     private val runId = UUID.randomUUID().toString()
     private val runStarted = SystemClock.elapsedRealtime()
@@ -110,7 +111,14 @@ class ExecutionEngine(
                         "No preceding START_VIDEO gesture completed", 0)
                     break
                 }
-                var result = runPlaybackStep(timing, step, beforeAttempts = {
+                // The saved gap runs from finger-up to the next finger-down. Android callback
+                // and step accounting time have already consumed part of that gap.
+                val timedStep = if (step.kind == ActionKind.RECORDED_TOUCH && previousTouchEnd != null) {
+                    val elapsed = (SystemClock.elapsedRealtime() - checkNotNull(previousTouchEnd)).coerceAtLeast(0)
+                    step.copy(interActionDelayMs = (step.interActionDelayMs - elapsed).coerceAtLeast(0))
+                } else step
+                previousTouchEnd = null
+                var result = runPlaybackStep(timing, timedStep, beforeAttempts = {
                     if (step.kind == ActionKind.STOP_VIDEO &&
                         (step.packageName ?: preset.apps.firstOrNull()?.packageName) != CameraPolicy.PACKAGE) {
                         // Recorded delay already elapsed. Wait only the remaining minimum duration.
@@ -179,7 +187,10 @@ class ExecutionEngine(
                 if (!result.first || step.kind == ActionKind.END_RUN) break
             }
             // An explicit verification is authoritative; otherwise verify even after a failed gesture.
-            if (media == null) media = verifyMedia(baseline, preset, startedAt)
+            if (media == null) media = if (stepResults.any { !it.success }) {
+                event("MEDIA_SCAN_AFTER_FAILED_STEP")
+                verifier.verify(baseline, preset.media, preset.apps.map { it.packageName }.toSet(), startedAt)
+            } else verifyMedia(baseline, preset, startedAt)
         } catch (_: CancellationException) {
             event("RUN_CANCELLED", values = mapOf("videoMayStillBeRecording" to if (TouchPolicy.isTouch(preset)) "unknown-touch-replay" else (startedVideoAtElapsedMs != null).toString()))
             return report(preset, startedAt, Outcome.CANCELLED, stepResults,
@@ -230,7 +241,7 @@ class ExecutionEngine(
         return result
     }
 
-    private suspend fun prepareTouch(preset: Preset, pkg: String?, timeoutMs: Long): Pair<TouchProfile?, String> {
+    private suspend fun prepareTouch(preset: Preset, pkg: String?, timeoutMs: Long, popup: Boolean? = null): Pair<TouchProfile?, String> {
         val binding = TouchPolicy.profile(preset, pkg) ?: return null to "TOUCH_PROFILE_MISSING"
         var current: TouchProfile? = null
         var stable = false
@@ -238,11 +249,16 @@ class ExecutionEngine(
         while (SystemClock.elapsedRealtime() < deadline) {
             gate()
             val frame = TouchEnvironment.current(service, binding.packageName)
-            if (frame != null && frame == current) { stable = true; break }
+            if (frame != null && TouchPolicy.compatibility(binding, frame).isEmpty() &&
+                (popup == null || TouchEnvironment.popup(service, binding) == popup)) {
+                current = frame
+                stable = true
+                break
+            }
             current = frame
-            timing.waitMs(120)
+            timing.waitMs(40)
         }
-        if (!stable || current == null) return null to "TOUCH_NOT_READY: selected app must be foreground; keyboard/editable fields and system UI are excluded"
+        if (!stable || current == null) return null to "TOUCH_NOT_READY: expected app, window or recorded popup did not appear before the step timeout"
         val errors = TouchPolicy.compatibility(binding, current)
         if (errors.isNotEmpty()) return null to "TOUCH_INCOMPATIBLE: ${errors.joinToString("; ")}"
         if (binding.packageName !in touchStartAccepted && preset.requireTouchStart != false) {
@@ -280,7 +296,7 @@ class ExecutionEngine(
             return ui.waitForApp(pkg, step.timeoutMs) to "Wait for $pkg"
         }
         // Every UI action is scoped to its selected target app, never a random foreground screen.
-        if (step.kind !in setOf(ActionKind.PRESS_BACK, ActionKind.PRESS_HOME, ActionKind.WAIT_MS,
+        if (step.kind !in setOf(ActionKind.RECORDED_TOUCH, ActionKind.PRESS_BACK, ActionKind.PRESS_HOME, ActionKind.WAIT_MS,
                 ActionKind.VERIFY_MEDIA, ActionKind.END_RUN) &&
             (pkg == null || pkg !in preset.apps.map { it.packageName } ||
                 !ui.waitForApp(pkg, step.timeoutMs))) {
@@ -288,7 +304,7 @@ class ExecutionEngine(
         }
         return when (step.kind) {
             ActionKind.RECORDED_TOUCH -> {
-                val prepared = prepareTouch(preset, pkg, step.timeoutMs)
+                val prepared = prepareTouch(preset, pkg, step.timeoutMs, step.expectsPopup)
                 val frame = prepared.first
                 if (frame == null) false to prepared.second else {
                     val stroke = checkNotNull(step.touchStroke)
@@ -296,8 +312,9 @@ class ExecutionEngine(
                         "durationMs" to stroke.durationMs.toString()))
                     ui.replayTouch(stroke, frame, ready = {
                         val current = TouchEnvironment.current(service, frame.packageName)
-                        current != null && TouchPolicy.compatibility(frame, current).isEmpty()
-                    })
+                        current != null && TouchPolicy.compatibility(frame, current).isEmpty() &&
+                            (step.expectsPopup == null || TouchEnvironment.popup(service, frame) == step.expectsPopup)
+                    }, onDispatch = { previousTouchEnd = SystemClock.elapsedRealtime() + stroke.durationMs })
                 }
             }
             ActionKind.TAKE_PHOTO, ActionKind.START_VIDEO, ActionKind.STOP_VIDEO -> {

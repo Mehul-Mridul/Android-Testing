@@ -45,7 +45,7 @@ object RecordingSession {
 
     fun begin(context: Context, name: String, apps: List<AppSpec>, media: MediaExpectation,
               mode: PlaybackMode = PlaybackMode.SMART_CONTROLS) {
-        require(name.isNotBlank() && apps.isNotEmpty())
+        require(name.isNotBlank() && apps.size == 1)
         check(mutable.value?.active != true) { "Another recording is active" }
         lastEventAt = 0L
         lastPackage = null
@@ -110,7 +110,7 @@ object RecordingSession {
             activeTouchPackage = profile.packageName, steps = draft.steps + transition)
         if (previous != profile.packageName || updated != profiles) persist(context)
     }
-    fun recordTouch(context: Context, stroke: TouchStroke, delayMs: Long): String? {
+    fun recordTouch(context: Context, stroke: TouchStroke, delayMs: Long, popup: Boolean?): String? {
         val draft = mutable.value ?: return null
         if (!draft.active || draft.paused || draft.playbackMode != PlaybackMode.RECORDED_TOUCHES) return null
         if (draft.steps.size >= 1000 || draft.steps.sumOf { it.touchStroke?.points?.size ?: 0 } + stroke.points.size > 20_000) {
@@ -119,7 +119,7 @@ object RecordingSession {
         }
         val step = AutomationStep(label = if (stroke.points.size > 1) "Recorded swipe" else if (stroke.durationMs >= 500) "Recorded hold" else "Recorded tap",
             kind = ActionKind.RECORDED_TOUCH, packageName = draft.activeTouchPackage ?: draft.apps.first().packageName,
-            touchStroke = stroke, maxAttempts = 1, interActionDelayMs = delayMs,
+            touchStroke = stroke, expectsPopup = popup, maxAttempts = 1, interActionDelayMs = delayMs,
             capturedAtEpochMs = System.currentTimeMillis(), needsReview = true)
         addStep(context, step)
         return step.id

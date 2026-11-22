@@ -39,7 +39,22 @@ object BatchController {
         mutable.value = BatchUiState(running = true, total = presets.size)
         job = scope.launch {
             val results = mutableListOf<ExecutionReport>()
+            val timing = PlaybackTiming {
+                currentCoroutineContext().ensureActive()
+                while (paused) delay(100)
+            }
+            suspend fun clearRecents(stage: String): Boolean {
+                mutable.value = mutable.value.copy(current = stage)
+                val result = RecentAppsCleanup.clear(service, timing)
+                com.example.captureautomator.util.AndroidDevice.launch(service, service.packageName)
+                if (!result.startsWith("RECENTS_CLEAR_REQUESTED")) {
+                    mutable.value = mutable.value.copy(error = "$stage: $result")
+                    return false
+                }
+                return true
+            }
             try {
+                if (!clearRecents("Clearing Recents before batch")) return@launch
                 for ((index, preset) in presets.withIndex()) {
                     mutable.value = mutable.value.copy(position = index + 1, current = preset.name)
                     service.showIndicator(false, "Batch ${index + 1}/${presets.size}: ${preset.name}")
@@ -49,12 +64,14 @@ object BatchController {
                             currentCoroutineContext().ensureActive()
                             while (paused) { delay(150); currentCoroutineContext().ensureActive() }
                         })
-                    val report = runner.execute(preset)
+                    val report = runner.execute(preset.copy(clearRecentsAfterRun = false, requireTouchStart = false))
                     withContext(NonCancellable) { repository.saveReport(report) }
                     results += report
                     mutable.value = mutable.value.copy(reports = results.toList())
                     if ((stopOnFail || report.results.any { it.message.startsWith("App switch withheld") } || report.media.issues.any { it.contains("deadline reached") }) && report.outcome != Outcome.PASS) break
                 }
+                clearRecents("Clearing Recents after batch")
+                mutable.value = mutable.value.copy(current = "Batch finished")
             } catch (_: CancellationException) {
                 // Completed individual reports remain saved; never silently retry media captures.
             } catch (e: Exception) {

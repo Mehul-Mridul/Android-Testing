@@ -19,6 +19,14 @@ object TouchEnvironment {
     private data class Anchor(val profile: TouchProfile)
     private val anchors = mutableMapOf<String, Anchor>()
 
+    // Compare the focused window to the bound app area, excluding system insets.
+    fun popup(service: AutomationAccessibilityService, profile: TouchProfile): Boolean? {
+        val window = service.windows.firstOrNull { it.isFocused } ?: return null
+        if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION || window.root?.packageName != profile.packageName) return null
+        val bounds = Rect().also(window::getBoundsInScreen)
+        return !bounds.contains(Rect(profile.left, profile.top, profile.left + profile.width, profile.top + profile.height))
+    }
+
     /** Reads package/focus/geometry only. Keyboard and editable fields are deliberately excluded. */
     @Suppress("DEPRECATION")
     fun current(service: AutomationAccessibilityService, pkg: String): TouchProfile? {
@@ -67,9 +75,12 @@ object TouchEnvironment {
         if (anchor != null) {
             val base = anchor.profile
             val restored = profile.copy(left = base.left, top = base.top, width = base.width, height = base.height)
-            if (TouchPolicy.compatibility(base, restored).isEmpty() && TouchViewportPolicy.isInsetDialog(
+            if (TouchPolicy.compatibility(base, restored).isEmpty() && (TouchViewportPolicy.isInsetDialog(
                     TouchViewport(base.left, base.top, base.width, base.height),
-                    TouchViewport(profile.left, profile.top, profile.width, profile.height))) return restored
+                    TouchViewport(profile.left, profile.top, profile.width, profile.height)) ||
+                    (profile.left == base.left && profile.width == base.width && profile.top > base.top &&
+                        profile.top + profile.height == base.top + base.height &&
+                        windows.none { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.root?.packageName?.toString() != pkg }))) return restored
         }
         // Only establish an app anchor from an app occupying the complete safe display area.
         // Dialog-only initial screens still work, but cannot redefine an existing full-app binding.

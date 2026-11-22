@@ -83,6 +83,7 @@ data class AutomationStep(
     val classificationUncertain: Boolean = false,
     /** Reference timing only; known camera STOP is scheduled from the configured media duration. */
     val recordedVideoDurationMs: Long = 0,
+    val expectsPopup: Boolean? = null,
     val minimumSavedBeforeLaunch: Int? = null,
     val touchStroke: TouchStroke? = null
 )

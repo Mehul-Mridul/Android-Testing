@@ -171,9 +171,10 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
                     }
                     Page.HISTORY -> HistoryPage(runs)
                     Page.BATCH -> BatchPage(rows, batch, onRun = { selected, stopOnFail ->
-                        val presets = rows.filter { it.id in selected }
+                        val presets = selected.mapNotNull { id -> rows.find { it.id == id } }
                             .mapNotNull { runCatching { Codec.parsePreset(it.json) }.getOrNull() }
-                        BatchController.run(activity, presets, repository, stopOnFail)
+                        if (presets.size == selected.size) BatchController.run(activity, presets, repository, stopOnFail)
+                        else notice = "A selected preset could not be loaded"
                     })
                     Page.SETTINGS -> SettingsPage(activity, onPermission = ::requestPermissions)
                     Page.DEVICE -> DevicePage(activity)
@@ -244,20 +245,10 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
     var photoCount by remember { mutableStateOf("1") }
     var videoCount by remember { mutableStateOf("0") }
     var durationSeconds by remember { mutableStateOf("5") }
-    var mode by remember { mutableStateOf(PlaybackMode.RECORDED_TOUCHES) }
-    val selected = remember { mutableStateListOf<String>() }
+    var selected by remember { mutableStateOf<String?>(null) }
     val apps = remember { AndroidDevice.installedLaunchableApps(activity) }
     Column {
-        Heading("New recording", "Choose apps explicitly, then perform the actual workflow in the target app.")
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (mode == PlaybackMode.RECORDED_TOUCHES) Button(onClick = {}) { Text("Recorded touches") }
-            else OutlinedButton(onClick = { mode = PlaybackMode.RECORDED_TOUCHES }) { Text("Recorded touches") }
-            if (mode == PlaybackMode.SMART_CONTROLS) Button(onClick = {}) { Text("Smart controls") }
-            else OutlinedButton(onClick = { mode = PlaybackMode.SMART_CONTROLS }) { Text("Smart controls") }
-        }
-        Text(if (mode == PlaybackMode.RECORDED_TOUCHES)
-            "Selected apps, one finger. Wait for Ready after each gesture. Next opens the next app; same-app popups stay in the recording. Keyboard and system bars are excluded."
-            else "Use named controls and supported camera state checks.", style = MaterialTheme.typography.bodySmall)
+        Heading("New touch recording", "Choose one app. Use Batch to play several presets in sequence.")
         OutlinedTextField(value = name, onValueChange = { name = it }, label = { Text("Preset name") },
             modifier = Modifier.fillMaxWidth(), singleLine = true)
         Spacer(Modifier.height(6.dp))
@@ -269,20 +260,13 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         OutlinedButton(onClick = onPermission) { Text("Grant media + notification permissions") }
         OutlinedTextField(query, { query = it }, label = { Text("Find installed application") },
             modifier = Modifier.fillMaxWidth(), singleLine = true)
-        Text("Selected: ${selected.size} application(s)", style = MaterialTheme.typography.bodySmall)
+        Text("Selected: " + (apps.find { it.packageName == selected }?.displayName ?: "None"))
         LazyColumn(modifier = Modifier.weight(1f)) {
-            items(apps.filter { it.displayName.contains(query, true) || it.packageName.contains(query, true) }) { app ->
+            items(apps.filter { it.displayName.contains(query, true) || it.packageName.contains(query, true) }, key = { it.packageName }) { app ->
                 Row(Modifier.fillMaxWidth().clickable {
-                    if (app.packageName in selected) selected.remove(app.packageName) else {
-                        selected.add(app.packageName)
-                    }
+                    selected = if (selected == app.packageName) null else app.packageName
                 }.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = app.packageName in selected, onCheckedChange = { yes ->
-                        if (yes) {
-                                if (app.packageName !in selected) selected.add(app.packageName)
-                        }
-                        else selected.remove(app.packageName)
-                    })
+                    Checkbox(checked = selected == app.packageName, onCheckedChange = null)
                     Column {
                         Text(app.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Text("${app.packageName} · ${app.recordedVersion}", style = MaterialTheme.typography.bodySmall)
@@ -291,11 +275,11 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
             }
         }
         Button(onClick = {
-            val chosen = apps.filter { it.packageName in selected }
+            val chosen = listOf(apps.singleOrNull { it.packageName == selected } ?: return@Button)
             onBegin(name, chosen, MediaExpectation(photoCount.toIntOrNull() ?: 2,
-                videoCount.toIntOrNull() ?: 1, (durationSeconds.toLongOrNull() ?: 5L) * 1000), mode)
-        }, enabled = name.isNotBlank() && selected.isNotEmpty(), modifier = Modifier.fillMaxWidth()) {
-            Text(if (mode == PlaybackMode.RECORDED_TOUCHES) "Start touch recording" else "Start recording and open selected app")
+                videoCount.toIntOrNull() ?: 1, (durationSeconds.toLongOrNull() ?: 5L) * 1000), PlaybackMode.RECORDED_TOUCHES)
+        }, enabled = name.isNotBlank() && selected != null, modifier = Modifier.fillMaxWidth()) {
+            Text("Start touch recording")
         }
         Text("Wait for Ready after each touch. Include local-save popup responses in your recording.",
             style = MaterialTheme.typography.bodySmall)
@@ -596,11 +580,11 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
 }
 
 @Composable private fun BatchPage(rows: List<PresetRow>, state: BatchUiState,
-                                  onRun: (Set<String>, Boolean) -> Unit) {
+                                  onRun: (List<String>, Boolean) -> Unit) {
     val selected = remember { mutableStateListOf<String>() }
     var stopOnFail by remember { mutableStateOf(true) }
     Column {
-        Heading("Batch execution", "Run multiple saved presets in order; each gets a separate media baseline")
+        Heading("Batch execution", "Select presets in playback order. Start each app on its recorded screen. Batch clears Recents before and after playback.")
         Text("${state.position}/${state.total} ${state.current}")
         if (state.error.isNotBlank()) Text(state.error, color = MaterialTheme.colorScheme.error)
         if (state.running) {
@@ -615,21 +599,20 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 Checkbox(stopOnFail, { stopOnFail = it })
                 Text("Stop batch when a preset fails or is unverifiable")
             }
-            Button(onClick = { onRun(selected.toSet(), stopOnFail) }, enabled = selected.isNotEmpty()) {
-                Text("Run ${selected.size} selected preset(s)")
+            Button(onClick = { onRun(selected.toList(), stopOnFail) }, enabled = selected.isNotEmpty()) {
+                Text("Start prepared batch (${selected.size})")
             }
         }
         if (state.reports.isNotEmpty()) {
             Text("Results: ${state.reports.joinToString { "${it.presetName}: ${it.outcome}" }}")
         }
         LazyColumn {
-            items(rows) { row ->
-                Row(Modifier.fillMaxWidth().clickable {
-                    if (row.id in selected) selected.remove(row.id) else selected.add(row.id)
+            items(rows, key = { it.id }) { row ->
+                Row(Modifier.fillMaxWidth().clickable(enabled = !state.running) {
+                    if (!selected.remove(row.id)) selected.add(row.id)
                 }, verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(row.id in selected, onCheckedChange = { yes ->
-                        if (yes) { if (row.id !in selected) selected.add(row.id) } else selected.remove(row.id)
-                    })
+                    Checkbox(row.id in selected, onCheckedChange = null)
+                    if (row.id in selected) Text("${selected.indexOf(row.id) + 1}. ")
                     Text(row.name)
                 }
             }

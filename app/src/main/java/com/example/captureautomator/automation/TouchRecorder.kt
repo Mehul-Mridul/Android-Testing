@@ -44,36 +44,29 @@ object TouchRecorder {
         message.value = "Open the selected app; wait for the Ready touch controls."
         monitor = scope.launch {
             try {
-                val verifier = MediaVerifier(service)
-                var segmentStart = System.currentTimeMillis()
-                var segmentBase = verifier.baseline()
-                var nextMinimum: Int? = null
+                var unchangedSince = SystemClock.elapsedRealtime()
                 var previous: TouchProfile? = null
                 var stable = 0
                 var wasAvailable = false
                 while (isActive) {
                     val draft = RecordingSession.state.value ?: break
                     if (!draft.active || draft.playbackMode != PlaybackMode.RECORDED_TOUCHES) break
-                    if (busy) { hide(); delay(100); continue }
+                    if (busy) { hide(); delay(20); continue }
                     val current = draft.apps.firstNotNullOfOrNull { TouchEnvironment.current(service, it.packageName) }
                     if (current == null) {
                         hide(); wasAvailable = false; stable = 0
                         message.value = "Touch capture suspended outside the selected app or while a keyboard is visible."
                     } else {
                         stable = if (current == previous) stable + 1 else 0
+                        if (current != previous) unchangedSince = SystemClock.elapsedRealtime()
                         previous = current
                         val profiles = draft.touchProfiles ?: listOfNotNull(draft.touchProfile)
                         val recorded = profiles.firstOrNull { it.packageName == current.packageName }
-                        if (stable < 2) { hide(); delay(120); continue }
+                        if (stable < 2 || (recorded == null && SystemClock.elapsedRealtime() - unchangedSince < 1000)) { hide(); delay(120); continue }
                         val binding = recorded ?: current
                         if (draft.activeTouchPackage != current.packageName || recorded == null) {
                             hide()
-                            if (draft.activeTouchPackage != current.packageName) {
-                                segmentStart = System.currentTimeMillis()
-                                segmentBase = verifier.baseline()
-                            }
-                            RecordingSession.touchProfile(service, binding, nextMinimum)
-                            nextMinimum = null
+                            RecordingSession.touchProfile(service, binding)
                             resetDelay()
                         }
                         if (TouchPolicy.compatibility(binding, current).isNotEmpty()) {
@@ -91,27 +84,6 @@ object TouchRecorder {
                             val controls = windows!!.bar(binding, if (draft.paused) "Paused (drag)" else "Ready (drag)", listOf(
                                 (if (draft.paused) "Resume" else "Pause") to { if (RecordingSession.state.value?.paused == true) RecordingSession.resume(service) else RecordingSession.pause(service); hide() },
                                 "Back" to { back(service, binding) },
-                                *if (draft.apps.size > 1) arrayOf("Next" to {
-                                    val next = draft.apps[(draft.apps.indexOfFirst { it.packageName == binding.packageName } + 1) % draft.apps.size]
-                                    if (!busy) {
-                                        busy = true
-                                        hide()
-                                        forwarding = scope.launch {
-                                            try {
-                                                val touched = draft.steps.takeLastWhile { it.kind != ActionKind.LAUNCH_APP }
-                                                    .any { it.kind == ActionKind.RECORDED_TOUCH }
-                                                val requiresSave = !draft.paused && touched && (draft.media.photos > 0 || draft.media.videos > 0)
-                                                if (requiresSave) android.widget.Toast.makeText(service, "Waiting for this app to save", android.widget.Toast.LENGTH_SHORT).show()
-                                                val count = if (requiresSave) verifier.waitForSaved(segmentBase, draft.media,
-                                                    binding.packageName, segmentStart, 1, PlaybackTiming { ensureActive() }) else 0
-                                                if ((!requiresSave || count > 0) && service.activePackage() == binding.packageName) {
-                                                    nextMinimum = count
-                                                    com.example.captureautomator.util.AndroidDevice.launch(service, next.packageName)
-                                                } else android.widget.Toast.makeText(service, "App switch withheld. Check the local save, or Pause then Next for navigation only.", android.widget.Toast.LENGTH_LONG).show()
-                                            } finally { if (generation == owner) busy = false }
-                                        }
-                                    }
-                                }) else emptyArray(),
                                 "Stop" to { RecordingSession.stop(service); service.clearIndicator(); showApp(service) }))
                             bar = controls.first; label = controls.second
                         }
@@ -119,7 +91,7 @@ object TouchRecorder {
                         else if (canvas == null) { hide() }
                         else message.value = "Ready: single-finger gestures are forwarded after release."
                     }
-                    delay(120)
+                    delay(40)
                 }
             } finally { if (owner == generation) hide() }
         }
@@ -127,14 +99,15 @@ object TouchRecorder {
 
     private fun forward(service: AutomationAccessibilityService, profile: TouchProfile, stroke: TouchStroke) {
         if (busy || RecordingSession.state.value?.paused == true) return
-        val delayMs = (SystemClock.elapsedRealtime() - lastCompletedAt - stroke.durationMs).coerceAtLeast(0)
+        val releasedAt = SystemClock.elapsedRealtime()
+        val delayMs = (releasedAt - lastCompletedAt - stroke.durationMs).coerceAtLeast(0)
         busy = true; hide(); message.value = "Forwarding one gesture; wait for Ready."
         val owner = generation
         forwarding = scope.launch {
             var stepId: String? = null
             var completed = false
             try {
-                delay(100) // Remove both overlays before injection; never capture our own gesture.
+                delay(16) // Remove both overlays before injection; never capture our own gesture.
                 if (delayMs > 300_000) {
                     RecordingSession.stopWithIssue(service, "Recorded idle delay exceeded five minutes")
                     return@launch
@@ -143,10 +116,10 @@ object TouchRecorder {
                     val draft = RecordingSession.state.value
                     val current = TouchEnvironment.current(service, profile.packageName)
                     draft?.active == true && !draft.paused && current != null && TouchPolicy.compatibility(profile, current).isEmpty()
-                }, onDispatch = { stepId = RecordingSession.recordTouch(service, stroke, delayMs) })
+                }, onDispatch = { stepId = RecordingSession.recordTouch(service, stroke, delayMs, TouchEnvironment.popup(service, profile)) })
                 completed = result.first
                 stepId?.let { RecordingSession.touchCompleted(service, it, completed) }
-                lastCompletedAt = SystemClock.elapsedRealtime()
+                lastCompletedAt = releasedAt
                 if (!completed && RecordingSession.state.value?.active == true) {
                     message.value = "Gesture could not be forwarded safely. It was not retried."
                     RecordingSession.stopWithIssue(service, message.value); service.clearIndicator(); showApp(service)
