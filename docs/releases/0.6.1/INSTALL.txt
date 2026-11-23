@@ -1,0 +1,11 @@
+3P Capture Automator 0.6.1-dev, versionCode 9
+
+Use 3P-Capture-Automator-0.6.1-dev.apk for normal use. The debug APK is for diagnostics.
+Both APKs use the same local development key as the prior installed APK.
+Certificate SHA-256: 48bd3b4b11fefe1bccd94453a30cb9d6be6a1ad54244c1db41d840613de86c46
+
+Install as an update; do not uninstall or clear storage. If Android reports a signature mismatch, stop and export presets before considering a different installation. Do not bypass signature checks.
+Allow installation from the file-opening app only as needed, then disable that permission. Reconnect Automator Accessibility if Android shows it disconnected after updating. It is still required for gesture playback and Recents controls.
+
+Coordinate recordings need the same app starting screen, orientation, window size and app layout. Record a new copy when a workflow changes. Existing presets were not rewritten.
+Clear Recents is an Android launcher request; locked/protected tasks may remain. It is not a force-stop of background processes.

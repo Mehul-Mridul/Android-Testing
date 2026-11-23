@@ -1,0 +1,7 @@
+{
+  "allUnsignedBuildEntriesMatchSignedApk": true,
+  "dexSha256": {
+    "classes.dex": "bd6d2dc7de5b22a7581de4f1d0787fe76fc8b66755af5a5b746f3d185478d048",
+    "classes2.dex": "e8593268ff28267144fb13376dc837620961308d95f1f914957db8f22acbacaf"
+  }
+}

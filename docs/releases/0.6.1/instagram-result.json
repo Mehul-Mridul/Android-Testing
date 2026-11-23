@@ -1,0 +1,596 @@
+{
+  "device": {
+    "androidSdk": 34,
+    "densityDpi": 440,
+    "heightPx": 2197,
+    "manufacturer": "vivo",
+    "model": "I2201",
+    "widthPx": 1080
+  },
+  "diagnostics": [
+    {
+      "elapsedMs": 2,
+      "event": "RUN_STARTED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "values": {
+        "presetId": "6391b146-4faa-4c6d-89c4-c87eec41c50e"
+      }
+    },
+    {
+      "elapsedMs": 146,
+      "event": "BASELINE",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "values": {
+        "ids": "47",
+        "permission": "true",
+        "readable": "true"
+      }
+    },
+    {
+      "elapsedMs": 147,
+      "event": "STEP_STARTED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "205b9b57-8745-4be2-8b18-693aef1604a2",
+      "values": {
+        "kind": "LAUNCH_APP",
+        "recordedDelayMs": "0"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 148,
+      "event": "ACTION_ATTEMPT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "205b9b57-8745-4be2-8b18-693aef1604a2",
+      "values": {}
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 622,
+      "event": "ACTION_RESULT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "205b9b57-8745-4be2-8b18-693aef1604a2",
+      "values": {
+        "completed": "true",
+        "mediaConfirmed": "false",
+        "status": "LAUNCH_APP"
+      }
+    },
+    {
+      "elapsedMs": 623,
+      "event": "STEP_FINISHED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "205b9b57-8745-4be2-8b18-693aef1604a2",
+      "values": {
+        "success": "true"
+      }
+    },
+    {
+      "elapsedMs": 623,
+      "event": "STEP_STARTED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "7e93ed6b-1d76-452f-9f3b-8f0bfc1ba376",
+      "values": {
+        "kind": "RECORDED_TOUCH",
+        "recordedDelayMs": "22514"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 23360,
+      "event": "ACTION_ATTEMPT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "7e93ed6b-1d76-452f-9f3b-8f0bfc1ba376",
+      "values": {}
+    },
+    {
+      "elapsedMs": 23398,
+      "event": "TOUCH_START_CHECKPOINT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "values": {}
+    },
+    {
+      "elapsedMs": 35283,
+      "event": "TOUCH_REPLAY",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "7e93ed6b-1d76-452f-9f3b-8f0bfc1ba376",
+      "values": {
+        "points": "1",
+        "durationMs": "1"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 35397,
+      "event": "CAPTURE_GESTURE_RESULT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "7e93ed6b-1d76-452f-9f3b-8f0bfc1ba376",
+      "values": {
+        "completed": "true",
+        "mediaConfirmed": "false",
+        "status": "TOUCH_GESTURE_COMPLETED"
+      }
+    },
+    {
+      "elapsedMs": 35398,
+      "event": "STEP_FINISHED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "7e93ed6b-1d76-452f-9f3b-8f0bfc1ba376",
+      "values": {
+        "success": "true"
+      }
+    },
+    {
+      "elapsedMs": 35399,
+      "event": "STEP_STARTED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "61ffd11d-646e-49f5-a1ee-5caabc66686a",
+      "values": {
+        "kind": "RECORDED_TOUCH",
+        "recordedDelayMs": "11051"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 46525,
+      "event": "ACTION_ATTEMPT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "61ffd11d-646e-49f5-a1ee-5caabc66686a",
+      "values": {}
+    },
+    {
+      "elapsedMs": 46554,
+      "event": "TOUCH_REPLAY",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "61ffd11d-646e-49f5-a1ee-5caabc66686a",
+      "values": {
+        "points": "1",
+        "durationMs": "1"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 46655,
+      "event": "CAPTURE_GESTURE_RESULT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "61ffd11d-646e-49f5-a1ee-5caabc66686a",
+      "values": {
+        "completed": "true",
+        "mediaConfirmed": "false",
+        "status": "TOUCH_GESTURE_COMPLETED"
+      }
+    },
+    {
+      "elapsedMs": 46657,
+      "event": "STEP_FINISHED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "61ffd11d-646e-49f5-a1ee-5caabc66686a",
+      "values": {
+        "success": "true"
+      }
+    },
+    {
+      "elapsedMs": 46657,
+      "event": "STEP_STARTED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "31e6368f-8d84-451d-bd32-713ffe776775",
+      "values": {
+        "kind": "RECORDED_TOUCH",
+        "recordedDelayMs": "13572"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 61290,
+      "event": "ACTION_ATTEMPT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "31e6368f-8d84-451d-bd32-713ffe776775",
+      "values": {}
+    },
+    {
+      "elapsedMs": 61335,
+      "event": "TOUCH_REPLAY",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "31e6368f-8d84-451d-bd32-713ffe776775",
+      "values": {
+        "points": "1",
+        "durationMs": "1"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 61487,
+      "event": "CAPTURE_GESTURE_RESULT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "31e6368f-8d84-451d-bd32-713ffe776775",
+      "values": {
+        "completed": "true",
+        "mediaConfirmed": "false",
+        "status": "TOUCH_GESTURE_COMPLETED"
+      }
+    },
+    {
+      "elapsedMs": 61488,
+      "event": "STEP_FINISHED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "31e6368f-8d84-451d-bd32-713ffe776775",
+      "values": {
+        "success": "true"
+      }
+    },
+    {
+      "elapsedMs": 61488,
+      "event": "STEP_STARTED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "b1a7b805-30d6-470d-bfa2-418732435277",
+      "values": {
+        "kind": "RECORDED_TOUCH",
+        "recordedDelayMs": "11018"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 72565,
+      "event": "ACTION_ATTEMPT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "b1a7b805-30d6-470d-bfa2-418732435277",
+      "values": {}
+    },
+    {
+      "elapsedMs": 72595,
+      "event": "TOUCH_REPLAY",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "b1a7b805-30d6-470d-bfa2-418732435277",
+      "values": {
+        "points": "1",
+        "durationMs": "1"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 72809,
+      "event": "CAPTURE_GESTURE_RESULT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "b1a7b805-30d6-470d-bfa2-418732435277",
+      "values": {
+        "completed": "true",
+        "mediaConfirmed": "false",
+        "status": "TOUCH_GESTURE_COMPLETED"
+      }
+    },
+    {
+      "elapsedMs": 72809,
+      "event": "STEP_FINISHED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "b1a7b805-30d6-470d-bfa2-418732435277",
+      "values": {
+        "success": "true"
+      }
+    },
+    {
+      "elapsedMs": 72810,
+      "event": "STEP_STARTED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "3a0af48b-dfe8-4be1-9bbb-49e8c5b0b591",
+      "values": {
+        "kind": "RECORDED_TOUCH",
+        "recordedDelayMs": "13206"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 86107,
+      "event": "ACTION_ATTEMPT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "3a0af48b-dfe8-4be1-9bbb-49e8c5b0b591",
+      "values": {}
+    },
+    {
+      "elapsedMs": 86149,
+      "event": "TOUCH_REPLAY",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "3a0af48b-dfe8-4be1-9bbb-49e8c5b0b591",
+      "values": {
+        "points": "1",
+        "durationMs": "1"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 86602,
+      "event": "CAPTURE_GESTURE_RESULT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "3a0af48b-dfe8-4be1-9bbb-49e8c5b0b591",
+      "values": {
+        "completed": "true",
+        "mediaConfirmed": "false",
+        "status": "TOUCH_GESTURE_COMPLETED"
+      }
+    },
+    {
+      "elapsedMs": 86605,
+      "event": "STEP_FINISHED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "3a0af48b-dfe8-4be1-9bbb-49e8c5b0b591",
+      "values": {
+        "success": "true"
+      }
+    },
+    {
+      "elapsedMs": 86606,
+      "event": "STEP_STARTED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "7b9420a9-2919-43c4-a170-90c15e91cc8c",
+      "values": {
+        "kind": "RECORDED_TOUCH",
+        "recordedDelayMs": "16853"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 103541,
+      "event": "ACTION_ATTEMPT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "7b9420a9-2919-43c4-a170-90c15e91cc8c",
+      "values": {}
+    },
+    {
+      "elapsedMs": 103565,
+      "event": "TOUCH_REPLAY",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "7b9420a9-2919-43c4-a170-90c15e91cc8c",
+      "values": {
+        "points": "1",
+        "durationMs": "1"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 103793,
+      "event": "CAPTURE_GESTURE_RESULT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "7b9420a9-2919-43c4-a170-90c15e91cc8c",
+      "values": {
+        "completed": "true",
+        "mediaConfirmed": "false",
+        "status": "TOUCH_GESTURE_COMPLETED"
+      }
+    },
+    {
+      "elapsedMs": 103794,
+      "event": "STEP_FINISHED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "7b9420a9-2919-43c4-a170-90c15e91cc8c",
+      "values": {
+        "success": "true"
+      }
+    },
+    {
+      "elapsedMs": 103794,
+      "event": "STEP_STARTED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "5cf41920-3d90-4c2c-b413-a4ea43dd1caf",
+      "values": {
+        "kind": "RECORDED_TOUCH",
+        "recordedDelayMs": "15617"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 119526,
+      "event": "ACTION_ATTEMPT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "5cf41920-3d90-4c2c-b413-a4ea43dd1caf",
+      "values": {}
+    },
+    {
+      "elapsedMs": 119555,
+      "event": "TOUCH_REPLAY",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "5cf41920-3d90-4c2c-b413-a4ea43dd1caf",
+      "values": {
+        "points": "1",
+        "durationMs": "1"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 119592,
+      "event": "CAPTURE_GESTURE_RESULT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "5cf41920-3d90-4c2c-b413-a4ea43dd1caf",
+      "values": {
+        "completed": "true",
+        "mediaConfirmed": "false",
+        "status": "TOUCH_GESTURE_COMPLETED"
+      }
+    },
+    {
+      "elapsedMs": 119593,
+      "event": "STEP_FINISHED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "5cf41920-3d90-4c2c-b413-a4ea43dd1caf",
+      "values": {
+        "success": "true"
+      }
+    },
+    {
+      "elapsedMs": 119593,
+      "event": "STEP_STARTED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "4ab60bfb-499a-4260-b927-b5b9a379900b",
+      "values": {
+        "kind": "VERIFY_MEDIA",
+        "recordedDelayMs": "0"
+      }
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 119594,
+      "event": "ACTION_ATTEMPT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "4ab60bfb-499a-4260-b927-b5b9a379900b",
+      "values": {}
+    },
+    {
+      "attempt": 1,
+      "elapsedMs": 119594,
+      "event": "ACTION_RESULT",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "4ab60bfb-499a-4260-b927-b5b9a379900b",
+      "values": {
+        "completed": "true",
+        "mediaConfirmed": "false",
+        "status": "VERIFY_MEDIA"
+      }
+    },
+    {
+      "elapsedMs": 119595,
+      "event": "MEDIA_VERIFICATION_STARTED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "values": {}
+    },
+    {
+      "elapsedMs": 120672,
+      "event": "MEDIA_SCAN",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "values": {
+        "scan": "1",
+        "photos": "1",
+        "videos": "0",
+        "complete": "true"
+      }
+    },
+    {
+      "elapsedMs": 121756,
+      "event": "MEDIA_SCAN",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "values": {
+        "scan": "2",
+        "photos": "1",
+        "videos": "0",
+        "complete": "true"
+      }
+    },
+    {
+      "elapsedMs": 122859,
+      "event": "MEDIA_SCAN",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "values": {
+        "scan": "3",
+        "photos": "1",
+        "videos": "0",
+        "complete": "true"
+      }
+    },
+    {
+      "elapsedMs": 122861,
+      "event": "MEDIA_VERIFICATION_FINISHED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "values": {
+        "photos": "1",
+        "videos": "0",
+        "complete": "true"
+      }
+    },
+    {
+      "elapsedMs": 122863,
+      "event": "STEP_FINISHED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "stepId": "4ab60bfb-499a-4260-b927-b5b9a379900b",
+      "values": {
+        "success": "true"
+      }
+    },
+    {
+      "elapsedMs": 123499,
+      "event": "RUN_FINISHED",
+      "runId": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+      "values": {
+        "outcome": "PASS"
+      }
+    }
+  ],
+  "endedAt": 1795375756920,
+  "id": "403d0e0f-022b-4c6f-90db-f3f0526827da",
+  "media": {
+    "issues": [],
+    "mediaEvidence": [
+      "PHOTO content://media/external/images/media/1000279306 owner=com.instagram.android size=80988"
+    ],
+    "photosFound": 1,
+    "verificationComplete": true,
+    "videosFound": 0
+  },
+  "notes": "",
+  "outcome": "PASS",
+  "presetId": "6391b146-4faa-4c6d-89c4-c87eec41c50e",
+  "presetName": "Instagram-discard-061-clean",
+  "results": [
+    {
+      "elapsedMs": 475,
+      "label": "Launch Instagram",
+      "message": "Launch and wait for com.instagram.android",
+      "stepId": "205b9b57-8745-4be2-8b18-693aef1604a2",
+      "success": true
+    },
+    {
+      "elapsedMs": 34775,
+      "label": "Recorded tap",
+      "message": "TOUCH_GESTURE_COMPLETED: one recorded stroke; media not yet verified",
+      "stepId": "7e93ed6b-1d76-452f-9f3b-8f0bfc1ba376",
+      "success": true
+    },
+    {
+      "elapsedMs": 11257,
+      "label": "Recorded tap",
+      "message": "TOUCH_GESTURE_COMPLETED: one recorded stroke; media not yet verified",
+      "stepId": "61ffd11d-646e-49f5-a1ee-5caabc66686a",
+      "success": true
+    },
+    {
+      "elapsedMs": 14830,
+      "label": "Recorded tap",
+      "message": "TOUCH_GESTURE_COMPLETED: one recorded stroke; media not yet verified",
+      "stepId": "31e6368f-8d84-451d-bd32-713ffe776775",
+      "success": true
+    },
+    {
+      "elapsedMs": 11321,
+      "label": "Recorded tap",
+      "message": "TOUCH_GESTURE_COMPLETED: one recorded stroke; media not yet verified",
+      "stepId": "b1a7b805-30d6-470d-bfa2-418732435277",
+      "success": true
+    },
+    {
+      "elapsedMs": 13794,
+      "label": "Recorded tap",
+      "message": "TOUCH_GESTURE_COMPLETED: one recorded stroke; media not yet verified",
+      "stepId": "3a0af48b-dfe8-4be1-9bbb-49e8c5b0b591",
+      "success": true
+    },
+    {
+      "elapsedMs": 17187,
+      "label": "Recorded tap",
+      "message": "TOUCH_GESTURE_COMPLETED: one recorded stroke; media not yet verified",
+      "stepId": "7b9420a9-2919-43c4-a170-90c15e91cc8c",
+      "success": true
+    },
+    {
+      "elapsedMs": 15798,
+      "label": "Recorded tap",
+      "message": "TOUCH_GESTURE_COMPLETED: one recorded stroke; media not yet verified",
+      "stepId": "5cf41920-3d90-4c2c-b413-a4ea43dd1caf",
+      "success": true
+    },
+    {
+      "elapsedMs": 3269,
+      "label": "Verify captured media",
+      "message": "MEDIA_VERIFICATION: 1 photos, 0 videos; complete=true; ",
+      "stepId": "4ab60bfb-499a-4260-b927-b5b9a379900b",
+      "success": true
+    }
+  ],
+  "resumedFromStep": 0,
+  "startedAt": 1795375633422
+}

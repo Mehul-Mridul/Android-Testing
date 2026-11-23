@@ -1,0 +1,27 @@
+{
+  "versionName": "0.6.1-dev",
+  "versionCode": 9,
+  "sourceCommit": "5171f9ea225bb43d0b515b3d1bfa3b480bd74f25",
+  "branch": "fix/recents-discard-0.6.1",
+  "tests": {
+    "tests": 49,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "github": {
+    "id": 45061885965,
+    "status": "completed",
+    "conclusion": "success",
+    "html_url": "https://github.com/Mehul-Mridul/Android-Testing/actions/runs/45061885965",
+    "head_sha": "5171f9ea225bb43d0b515b3d1bfa3b480bd74f25"
+  },
+  "certificateSha256": "48bd3b4b11fefe1bccd94453a30cb9d6be6a1ad54244c1db41d840613de86c46",
+  "installed": "normal APK, data-preserving update; Accessibility reconnect needed",
+  "sha256": {
+    "3P-Capture-Automator-0.6.1-dev.apk": "f841b89e2c7d144c99b363c6c44196c486b0b3b3b857adf44c0e9499536e07f0",
+    "3P-Capture-Automator-0.6.1-dev-debug.apk": "89aef1b0ee68ec564d867f84e06d8775bce447952a31ab5e6ce9afd28b8a8fd9",
+    "source-0.6.1.zip": "48663767d456615d495c5b94f0b708543752c869b2c9af7f98c112198cf6ec08",
+    "changes.patch": "8f5eab962553385542167493c5c63f91a3f482d346291731c8c15e6ff05d4913"
+  }
+}

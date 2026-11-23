@@ -1,60 +1,44 @@
 # 3P Capture Automator
 
-**Status:** An implementation-stage Android source project, **not** a validated production release.
+Android touch recording and playback for authorised app testing.
 
-This repository is an Android Studio Kotlin/Jetpack Compose application with a usable design for explicit recording, in-app preset editing, Room persistence, accessibility-based playback, a MediaStore verifier, reporting, and sequential batch execution. It is **not an APK** and has **not been compiled against an Android SDK or exercised on physical Samsung devices** in the creation environment.
+## Latest APK and documents
 
-## Core workflow
+**[Download 0.6.1-dev and all supporting files](https://github.com/Mehul-Mridul/Android-Testing/releases/tag/v0.6.1-dev)** · **[Repair and validation report](docs/releases/0.6.1/Repair-report.md)** · **[Installation instructions](docs/releases/0.6.1/INSTALL.txt)**
 
-1. Import this root directory into **Android Studio**.
-2. Install **JDK 17**, Android SDK Platform **35**, Android SDK Build Tools **35**, and Gradle **8.10.2**. Allow the IDE to download the Google/Maven dependencies.
-3. Sync and build using **Build → Make Project**, or with the command-line `gradle :app:assembleDebug`. The expected debug output **after a successful build** is `app/build/outputs/apk/debug/app-debug.apk`.
-4. Install your locally built APK on your QA device. In Settings → Accessibility, explicitly enable *3P Capture Automator (authorized testing)*. Android may require a restricted-settings approval for some sideloaded apps; follow the device's normal authorized Settings flow, never bypass it.
-5. Open the app → **Settings and permissions** and request the required Android photo/video access and notification permission. Choose **full** photo/video access to enable verification. A selected-photos-only grant is insufficient.
-6. Select **Record new automation**, name it, and choose only the target application packages. The recorder opens the first chosen app. Perform two photo saves and a five-second video save as a real tester, then tap the persistent notification **Stop** (or return to the app and press Stop).
-7. Tap **Review and edit captured steps**. Correct unknown actions. For camera controls that emit no accessibility click events, insert `TAKE_PHOTO`, `START_VIDEO`, `STOP_VIDEO`, and any missing save/return-to-camera actions manually, giving each an observed **resource ID, content description, or text**. If no stable selector exists, explicitly opt in to a normalized coordinate fallback and record normalized coordinates. The service never auto-enables fallback.
-8. Use the `START_VIDEO` and `STOP_VIDEO` action types; the runner enforces the preset's minimum configured video duration between these actions. The 5s default is configurable in the preset JSON and can be changed by editing an exported preset and importing it (import marks every step for review). A STOP_VIDEO without a confirmed start fails safely.
-9. **Save** the preset, choose **Run**, and return via the notification to view the result. The final verdict depends on newly saved, readable media—not a shutter tap.
-10. For a six-app sequence, create and calibrate six separate presets, then select them in **Batch execution**. The engine runs each with its own pre-run media baseline.
+Version 0.6.1-dev (version code 9) fixes Vivo landscape Recents cleanup, Instagram Save/Discard popup handling, and overlapping batch selection targets. It is a development prerelease for authorised testing.
 
-## Source tree
+49 automated tests, Android lint, debug/release builds and the [source build in GitHub Actions](https://github.com/Mehul-Mridul/Android-Testing/actions/runs/45061885965) passed. Physical checks on an iQOO 9T / Android 14 verified a new Instagram photo, Discard playback, two cleanup-enabled batch presets and landscape cleanup. Samsung phones/tablets and other social apps were not physically certified by these checks. The final normal APK was installed and opened; workflow evidence was collected using the debug build. See the report for exact scope, run IDs, known limitations and the disclosed test incident.
 
-- `core/` — versioned Kotlin preset/action/report schema, input validation, fail-closed verdict and pure-JVM selector ranking.
-- `app/.../automation/RecordingSession.kt` — limited-scope explicit recording, sanitized text placeholders, recovered draft review.
-- `AutomationAccessibilityService.kt` — system-bound accessibility event intake, gesture capability and user-visible notification.
-- `UiResolver.kt` — resource-ID/description/text ranking, ambiguity rejection, user-approved gesture fallbacks, element waits.
-- `ExecutionEngine.kt` — deterministic replay, retries, app scope checking, video pacing, safe cancellation, and verdict.
-- `MediaVerifier.kt` — media inventories, new file filtering, image/video metadata checks, ownership attribution and explicit partial outcomes.
-- `BatchController.kt` — sequential reports and stop-on-failure policy.
-- `app/.../data/` — Room preset and report storage, validated JSON import/export.
-- `app/.../ui/` — Compose home, creation, recorder controls, preset editor, library, batch, history, settings and device screen.
-- `samples/instagram_unverified_sample.json` — illustrative schema only; not a prerecorded selector mapping.
-- `docs/` — build, feasibility, limitations and test procedure.
+## Install and record
 
-## Development checks
+1. Download `3P-Capture-Automator-0.6.1-dev.apk` from Releases. Use the debug APK only for diagnostics.
+2. Update the matching-signature app without uninstalling or clearing storage. If Android reports a signature mismatch, stop and export presets before considering a different installation. The APK uses a local development signing key; certificate details and checksums are supplied with the release.
+3. Enable Automator Accessibility through Android Settings, and grant the photo/video access needed for verification. After an update, reconnect Accessibility if Android leaves it disconnected. No protection bypass is provided.
+4. Choose **Record new automation** and record one app at a time. Touch paths and timing are saved; app opening, Back and Recents use Accessibility assistance. Keep keyboard and password entry outside recordings.
+5. Include the complete local save and return sequence. Wait for a save popup to finish before tapping the underlying editor. Record the actual Discard button when a confirmation appears. Stop, review, and save the preset.
+6. Set the expected photo/video counts to the media actually saved. Playback success requires newly saved readable media when media verification is requested; a completed gesture alone does not prove a capture.
+7. Before replay, match the recorded starting screen, orientation, app layout and window configuration. Coordinate recordings require calibration/new recording when those change.
+8. For multiple apps, select separate presets in **Batch execution**. Batch manages its own cleanup before and after the sequence; each preset’s standalone cleanup checkbox does not trigger cleanup between batch items. Stop cancels pending actions. Android may retain locked/protected tasks.
 
-Run the platform-independent core smoke tests with installed Kotlin CLI:
+Original presets are not silently repaired or overwritten. Old Instagram presets missing Discard or containing a transient-popup tap need a newly recorded copy. Test presets retained on the inspected device are identified in the repair report.
 
-```bash
-./tools/test-core-offline.sh
+## Build and checks
+
+Use JDK 17, Android SDK Platform/Build Tools 35, and Gradle 8.10.2. Open this repository in Android Studio, or run:
+
+```sh
+gradle :core:test :app:testDebugUnitTest :app:lintDebug :app:assembleDebug :app:assembleRelease
 ```
 
-With a complete Android environment, run:
+The debug APK is written to `app/build/outputs/apk/debug/`. The normal release build is unsigned until signed with your preserved key. Never commit a keystore, signing password, local SDK configuration or account credentials.
 
-```bash
-gradle :core:test :app:assembleDebug
-```
+## Source and documentation
 
-GitHub Actions `.github/workflows/android.yml` is included to perform an Android build and core tests after the project is pushed to a GitHub repository. CI is **configured but has not run** as part of this delivery.
+- `core/`: preset schemas, playback policy, validation and JVM tests.
+- `app/`: Compose UI, explicit touch recorder, Accessibility-assisted playback, MediaStore verification, Room storage and batch execution.
+- `docs/releases/0.6.1/`: versioned repair findings, installation, automated and physical evidence, build logs, signatures and checksums.
+- Release assets: normal/debug APKs, exact app-source archive, patch and full document bundle.
+- Other files under `docs/` include earlier design/feasibility material; versioned release evidence describes the current validation scope.
 
-## Important truth-in-testing rules
-
-- `TYPE_VIEW_CLICKED` and scroll accessibility events are *observable events*, **not raw taps and not every event a custom camera view may emit**.
-- UI Automator / ADB assistance is a separate potential backend and is **not implemented** in this Android-only source snapshot.
-- Manual step correction is an explicit part of recording, especially Instagram/Facebook Story camera views.
-- Semantic control selection returns **no match** for ambiguous candidates. Coordinate fallback requires an explicit per-step opt-in and is not safe to assume portable across devices.
-- Android MediaStore cannot read app-private files. If permissions are limited or owner attribution is unconfirmed, the status remains PARTIAL rather than fabricated PASS.
-- The application does not publish Stories, send WhatsApp media, store passwords, intercept hidden keystrokes, or bypass any Android protections.
-- This build snapshot is intended for **authorized internal QA use**, not an assertion of compliance with Google Play accessibility-service distribution policy.
-
-See `docs/PLATFORM_FEASIBILITY.md`, `docs/TEST_PLAN.md`, and `docs/KNOWN_LIMITATIONS.md` before real-device trials.
+The app is for explicit authorised testing. It does not bypass Android permissions, collect hidden typed text, publish Stories, or send media/messages. MediaStore cannot verify files kept only in another app’s private storage. Coordinate playback cannot guarantee portability across devices or changing app interfaces.
