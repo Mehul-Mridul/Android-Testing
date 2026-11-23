@@ -191,12 +191,7 @@ class ExecutionEngine(
                 event("MEDIA_SCAN_AFTER_FAILED_STEP")
                 verifier.verify(baseline, preset.media, preset.apps.map { it.packageName }.toSet(), startedAt)
             } else verifyMedia(baseline, preset, startedAt)
-        } catch (_: CancellationException) {
-            event("RUN_CANCELLED", values = mapOf("videoMayStillBeRecording" to if (TouchPolicy.isTouch(preset)) "unknown-touch-replay" else (startedVideoAtElapsedMs != null).toString()))
-            return report(preset, startedAt, Outcome.CANCELLED, stepResults,
-                media ?: lastMediaScan?.copy(verificationComplete = false, issues = lastMediaScan!!.issues + "Verification interrupted by tester") ?: MediaResult(issues = listOf("Stopped by tester; no further gestures. Check Camera manually if video may be recording.")),
-                0, "Cancelled; capture state may be uncertain")
-        }
+        gate()
         val verdict = Verdict.outcome(stepResults, media, preset.media)
         val outcome = if (stepResults.size != preset.steps.size && verdict == Outcome.PASS) Outcome.FAIL else verdict
         fun returnToAutomator() = AndroidDevice.launch(context, context.packageName)
@@ -205,14 +200,21 @@ class ExecutionEngine(
         if (preset.clearRecentsAfterRun == true) {
             cleanup = if (returned && !switchBlocked) {
                 try { RecentAppsCleanup.clear(service, timing) }
-                catch (_: CancellationException) { "RECENTS_CANCELLED: no further cleanup actions" }
+                catch (e: CancellationException) { throw e }
                 catch (_: Exception) { "RECENTS_UNAVAILABLE: close recent apps manually" }
             } else "RECENTS_SKIPPED: app return or save barrier incomplete"
+            gate()
             returnToAutomator()
             event("RECENTS_CLEANUP", values = mapOf("status" to cleanup.substringBefore(':')))
         }
         return report(preset, startedAt, outcome, stepResults, media, 0,
             (mismatches + cleanup).filter { it.isNotBlank() }.joinToString("; "))
+        } catch (_: CancellationException) {
+            event("RUN_CANCELLED", values = mapOf("videoMayStillBeRecording" to if (TouchPolicy.isTouch(preset)) "unknown-touch-replay" else (startedVideoAtElapsedMs != null).toString()))
+            return report(preset, startedAt, Outcome.CANCELLED, stepResults,
+                media ?: lastMediaScan?.copy(verificationComplete = false, issues = lastMediaScan!!.issues + "Verification interrupted by tester") ?: MediaResult(issues = listOf("Stopped by tester; no further gestures. Check Camera manually if video may be recording.")),
+                0, "Cancelled; capture state may be uncertain")
+        }
     }
 
     private fun report(preset: Preset, started: Long, outcome: Outcome, steps: List<StepResult>,

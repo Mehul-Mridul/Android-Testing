@@ -59,7 +59,7 @@ fun AutomatorApp(activity: MainActivity, repository: PresetRepository) {
     var page by rememberSaveable(stateSaver = androidx.compose.runtime.saveable.Saver<Page, String>(
         save = { if (it == Page.EDIT) Page.LIBRARY.name else it.name },
         restore = { Page.valueOf(it) }
-    )) { mutableStateOf(Page.HOME) }
+    )) { mutableStateOf(if (batch.running || batch.phase == "INTERRUPTED") Page.BATCH else Page.HOME) }
     BackHandler(enabled = page != Page.HOME) { page = if (page == Page.EDIT) Page.LIBRARY else Page.HOME }
     SideEffect {
         @Suppress("DEPRECATION")
@@ -291,7 +291,17 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
             } }
             Spacer(Modifier.height(8.dp))
         }
-        if (batch.running) Text("Batch running: ${batch.position}/${batch.total} — ${batch.current}")
+        if (batch.running) {
+            StudioPanel(Modifier.fillMaxWidth()) {
+                Text("Batch ${batch.position}/${batch.total}: ${batch.current}")
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    StudioOutline(onClick = { go(Page.BATCH) }) { Text("Open batch") }
+                    StudioOutline(onClick = BatchController::stop, enabled = !batch.stopping) {
+                        Text(if (batch.stopping) "Stopping…" else "Stop batch")
+                    }
+                }
+            }
+        }
         BoxWithConstraints {
             if (maxWidth >= 600.dp) Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 Column(Modifier.weight(1f)) {
@@ -687,10 +697,10 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
         }
         if (state.running) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                StudioPrimary(onClick = { if (state.paused) BatchController.resume() else BatchController.pause() }) {
+                StudioPrimary(onClick = { if (state.paused) BatchController.resume() else BatchController.pause() }, enabled = !state.stopping) {
                     Text(if (state.paused) "Resume" else "Pause")
                 }
-                StudioOutline(onClick = BatchController::stop) { Text("Stop") }
+                StudioOutline(onClick = BatchController::stop, enabled = !state.stopping) { Text(if (state.stopping) "Stopping…" else "Stop") }
             }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {

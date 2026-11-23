@@ -11,8 +11,8 @@ android {
         applicationId = "com.example.captureautomator"
         minSdk = 29
         targetSdk = 35
-        versionCode = 10
-        versionName = "0.6.2-dev"
+        versionCode = 11
+        versionName = "0.6.3-dev"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
     buildTypes { release { isMinifyEnabled = false } }

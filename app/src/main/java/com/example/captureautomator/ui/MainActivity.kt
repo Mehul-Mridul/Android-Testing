@@ -19,6 +19,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         RecordingSession.recover(this)
+        BatchController.recover(this)
         processControlIntent(intent)
         setContent { AutomatorApp(this, repository) }
     }
@@ -28,7 +29,11 @@ class MainActivity : ComponentActivity() {
         processControlIntent(intent)
     }
     private fun processControlIntent(intent: Intent?) {
-        when (intent?.action) {
+        val action = intent?.action
+        // Consume once: Activity recreation must not deliver an old Stop to a new run.
+        if (action == "com.example.captureautomator.STOP_RECORDING" ||
+            action == "com.example.captureautomator.STOP_EXECUTION") intent?.action = null
+        when (action) {
             "com.example.captureautomator.STOP_RECORDING" -> {
                 RecordingSession.stop(this)
                 AutomationAccessibilityService.instance?.clearIndicator()

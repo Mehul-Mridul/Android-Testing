@@ -48,8 +48,14 @@ object ExecutionController {
             totalSteps = preset.steps.size)
         val startedAt = System.currentTimeMillis()
         job = scope.launch {
-            service.showIndicator(false, preset.name)
+            suspend fun store(report: ExecutionReport) = withContext(NonCancellable) {
+                try { withTimeout(3000) { repository.saveReport(report) } }
+                catch (e: Exception) {
+                    mutable.value = mutable.value.copy(error = "Report could not be saved: ${e.javaClass.simpleName}")
+                }
+            }
             try {
+                service.showIndicator(false, preset.name)
                 val engine = ExecutionEngine(context.applicationContext, service,
                     onProgress = { index, step, results ->
                         mutable.value = mutable.value.copy(stepIndex = index + 1,
@@ -63,21 +69,29 @@ object ExecutionController {
                         }
                     })
                 val report = engine.execute(preset)
-                withContext(NonCancellable) { repository.saveReport(report) }
-                mutable.value = mutable.value.copy(running = false, paused = false,
-                    report = report, completed = report.results)
+                mutable.value = mutable.value.copy(report = report, completed = report.results)
+                store(report)
+                mutable.value = mutable.value.copy(running = false, paused = false)
             } catch (_: CancellationException) {
                 val partial = mutable.value.completed
-                val report = ExecutionReport(presetId = preset.id, presetName = preset.name,
+                val report = mutable.value.report ?: ExecutionReport(presetId = preset.id, presetName = preset.name,
                     device = AndroidDevice.profile(context), startedAt = startedAt,
                     endedAt = System.currentTimeMillis(), outcome = Outcome.CANCELLED,
                     results = partial, media = MediaResult(issues = listOf("Stopped by tester")))
-                withContext(NonCancellable) { repository.saveReport(report) }
-                mutable.value = mutable.value.copy(running = false, paused = false, report = report)
+                mutable.value = mutable.value.copy(report = report)
+                store(report)
+                mutable.value = mutable.value.copy(running = false, paused = false)
             } catch (e: Exception) {
                 mutable.value = mutable.value.copy(running = false, paused = false,
                     error = "Execution failed: ${e.message}")
-            } finally { service.clearIndicator() }
+            } finally {
+                try { runCatching { service.clearIndicator() } }
+                finally {
+                    isPaused = false
+                    mutable.value = mutable.value.copy(running = false, paused = false)
+                    job = null
+                }
+            }
         }
     }
 

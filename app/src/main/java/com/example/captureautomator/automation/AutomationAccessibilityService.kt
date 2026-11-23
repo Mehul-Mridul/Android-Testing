@@ -7,6 +7,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.hardware.HardwareBuffer
@@ -54,31 +55,53 @@ class AutomationAccessibilityService : AccessibilityService() {
         }
     }
 
+    private var batchForeground = false
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        // Recents removes the Activity/task, not the explicitly running batch service.
+        super.onTaskRemoved(rootIntent)
+        if (BatchController.state.value.running) android.util.Log.i("CaptureBatch",
+            "Task removed; visible batch foreground session retained: ${BatchController.state.value.sessionId}")
+    }
+
+    fun beginBatchSession(name: String) {
+        val notification = sessionNotification(false, name)
+        if (Build.VERSION.SDK_INT >= 34)
+            startForeground(RECORD_NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
+        else startForeground(RECORD_NOTIFICATION_ID, notification)
+        batchForeground = true
+    }
+
     override fun onInterrupt() {
         if (RecordingSession.state.value?.active == true) RecordingSession.stop(this)
         TouchRecorder.stop(); TouchCalibration.cancel(false); TouchStartGate.cancel()
-        ExecutionController.stop(); BatchController.stop()
+        ExecutionController.stop(); BatchController.interrupt("Accessibility service interrupted; reconnect before starting a new batch")
     }
     override fun onDestroy() {
         onInterrupt()
         clearIndicator()
-        instance = null
+        if (instance === this) instance = null
         super.onDestroy()
     }
 
     fun showIndicator(recording: Boolean, name: String) {
+        val notification = sessionNotification(recording, name)
+        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(RECORD_NOTIFICATION_ID, notification)
+    }
+
+    private fun sessionNotification(recording: Boolean, name: String): Notification {
         val open = Intent(this, MainActivity::class.java).apply {
             action = "com.example.captureautomator.OPEN_SESSION"
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
-        val stop = Intent(this, MainActivity::class.java).apply {
+        val stop = Intent(this, SessionControlReceiver::class.java).apply {
             action = if (recording) "com.example.captureautomator.STOP_RECORDING"
                      else "com.example.captureautomator.STOP_EXECUTION"
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
         }
         val openPending = PendingIntent.getActivity(this, 10, open,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-        val stopPending = PendingIntent.getActivity(this, 11, stop,
+        val stopPending = PendingIntent.getBroadcast(this, 11, stop,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL)
             .setSmallIcon(com.example.captureautomator.R.drawable.ic_notification_capture)
@@ -89,10 +112,14 @@ class AutomationAccessibilityService : AccessibilityService() {
             .addAction(android.R.drawable.ic_media_pause, "Stop", stopPending)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
-        (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).notify(RECORD_NOTIFICATION_ID, notification)
+        return notification
     }
 
     fun clearIndicator() {
+        if (batchForeground) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            batchForeground = false
+        }
         (getSystemService(NOTIFICATION_SERVICE) as NotificationManager).cancel(RECORD_NOTIFICATION_ID)
     }
 
