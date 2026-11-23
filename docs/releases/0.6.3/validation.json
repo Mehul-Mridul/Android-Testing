@@ -1,0 +1,50 @@
+{
+  "versionName": "0.6.3-dev",
+  "versionCode": 11,
+  "automatedTests": {
+    "tests": 61,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "device": "iQOO 9T / I2201, Android 14",
+  "deviceMatrixChecksPassed": 9,
+  "matrixInstrumentationResult": "OK (1 test containing 9 checks)",
+  "stopLatencyObservedMs": [
+    3,
+    64,
+    65,
+    62,
+    3,
+    62
+  ],
+  "controlledProcessDeathRecovery": "PASS; zero replay touches; fixture counter 29 to 29",
+  "normalApkTaskRemoval": "PASS; same PID; two preset PASS; fixture 29 to 31",
+  "normalApkStop": "PASS; counter 31 to 31; Start enabled",
+  "normalApkRestartAfterStopAndTaskRemoval": "PASS; same PID; two preset PASS; counter 31 to 33",
+  "temporaryTestPresetsRemoved": true,
+  "testHarnessRemoved": true,
+  "originalPresetCountPreserved": 5,
+  "originalRotationSettingsRestored": {
+    "accelerometer_rotation": "0",
+    "user_rotation": "0"
+  },
+  "normalSignedApkInstalled": true,
+  "accessibilityConnectedAtFinish": true,
+  "runtimePayloadMatchesFinalBuild": true,
+  "nonRuntimeBuildMetadataDifferences": [
+    "META-INF/version-control-info.textproto"
+  ],
+  "buildMetadataNote": "The tested APK was built before the repair commit; only embedded Git revision metadata differs from the later rebuild. DEX, resources, manifest and assets match.",
+  "productionSourcesUnchangedSinceValidatedCommit": "5ac857f5f86f5ec4eadff8b5880b48827b963ab4",
+  "newNormalPermissions": [
+    "android.permission.FOREGROUND_SERVICE",
+    "android.permission.FOREGROUND_SERVICE_SPECIAL_USE"
+  ],
+  "limitations": [
+    "No physical Samsung test",
+    "Control-flow tests use an isolated counter app, not new camera/social media captures",
+    "An already dispatched gesture can finish; active video may need a manual stop",
+    "An Android force-stop can still terminate execution; recovery does not replay automatically"
+  ]
+}

@@ -1,0 +1,11 @@
+3P Capture Automator 0.6.3-dev, version code 11
+
+Use the normal APK for normal use. The debug APK is for diagnostics. Install as an update to the matching-signature app; do not uninstall or clear storage. Stop on a signature mismatch and export presets before considering another installation.
+
+Certificate SHA-256: 48bd3b4b11fefe1bccd94453a30cb9d6be6a1ad54244c1db41d840613de86c46 (local development key).
+
+This update adds a visible foreground session during explicit batches, with two normal Android foreground-service permissions. It does not add hidden monitoring or text collection. Notification Stop cancels pending work without reopening an Activity. A restarted process reports interruption and does not automatically resume capture gestures.
+
+Android may disconnect Accessibility after replacing/testing an APK. Reconnect the existing service in Settings if needed. Stop cannot undo a gesture already handed to Android; check the target app if video may still be recording.
+
+Task removal was tested on iQOO with the normal APK. This does not physically certify Samsung firmware. Force-stop can still terminate the app; recovery deliberately requires a fresh user start.
