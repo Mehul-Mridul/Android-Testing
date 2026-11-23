@@ -243,7 +243,7 @@ class ExecutionEngine(
         return result
     }
 
-    private suspend fun prepareTouch(preset: Preset, pkg: String?, timeoutMs: Long, popup: Boolean? = null): Pair<TouchProfile?, String> {
+    private suspend fun prepareTouch(preset: Preset, pkg: String?, timeoutMs: Long, popup: Boolean? = null, keyboard: Boolean? = null, window: TouchViewport? = null): Pair<TouchProfile?, String> {
         val binding = TouchPolicy.profile(preset, pkg) ?: return null to "TOUCH_PROFILE_MISSING"
         TouchEnvironment.bind(binding)
         var current: TouchProfile? = null
@@ -253,7 +253,10 @@ class ExecutionEngine(
             gate()
             val frame = TouchEnvironment.current(service, binding.packageName)
             if (frame != null && TouchPolicy.compatibility(binding, frame).isEmpty() &&
-                (popup == null || TouchEnvironment.popup(service, binding) == popup)) {
+                (popup == null || TouchEnvironment.popup(service, binding) == popup) &&
+                TouchEnvironment.keyboardVisible(service) == (keyboard ?: false) &&
+                (window == null || TouchEnvironment.appViewport(service, binding) == window) &&
+                TouchEnvironment.windowStable(service, binding)) {
                 current = frame
                 stable = true
                 break
@@ -261,7 +264,15 @@ class ExecutionEngine(
             current = frame
             timing.waitMs(40)
         }
-        if (!stable || current == null) return null to "TOUCH_NOT_READY: expected app, window or recorded popup did not appear before the step timeout"
+        if (!stable || current == null) {
+            event("TOUCH_READINESS_TIMEOUT", values = mapOf(
+                "expectedKeyboard" to (keyboard ?: false).toString(),
+                "actualKeyboard" to TouchEnvironment.keyboardVisible(service).toString(),
+                "expectedPopup" to popup.toString(),
+                "actualPopup" to TouchEnvironment.popup(service, binding).toString(),
+                "windowMatches" to (window == null || TouchEnvironment.appViewport(service, binding) == window).toString()))
+            return null to "TOUCH_NOT_READY: expected app, stable window, popup or keyboard state did not appear before the step timeout; no gesture sent"
+        }
         val errors = TouchPolicy.compatibility(binding, current)
         if (errors.isNotEmpty()) return null to "TOUCH_INCOMPATIBLE: ${errors.joinToString("; ")}"
         if (binding.packageName !in touchStartAccepted && preset.requireTouchStart != false) {
@@ -307,7 +318,7 @@ class ExecutionEngine(
         }
         return when (step.kind) {
             ActionKind.RECORDED_TOUCH -> {
-                val prepared = prepareTouch(preset, pkg, step.timeoutMs, step.expectsPopup)
+                val prepared = prepareTouch(preset, pkg, step.timeoutMs, step.expectsPopup, step.expectsKeyboard, step.touchWindow)
                 val frame = prepared.first
                 if (frame == null) false to prepared.second else {
                     val stroke = checkNotNull(step.touchStroke)
@@ -316,7 +327,10 @@ class ExecutionEngine(
                     ui.replayTouch(stroke, frame, ready = {
                         val current = TouchEnvironment.current(service, frame.packageName)
                         current != null && TouchPolicy.compatibility(frame, current).isEmpty() &&
-                            (step.expectsPopup == null || TouchEnvironment.popup(service, frame) == step.expectsPopup)
+                            (step.expectsPopup == null || TouchEnvironment.popup(service, frame) == step.expectsPopup) &&
+                            TouchEnvironment.keyboardVisible(service) == (step.expectsKeyboard ?: false) &&
+                            (step.touchWindow == null || TouchEnvironment.appViewport(service, frame) == step.touchWindow) &&
+                            TouchEnvironment.windowStable(service, frame)
                     }, onDispatch = { previousTouchEnd = SystemClock.elapsedRealtime() + stroke.durationMs })
                 }
             }
@@ -341,7 +355,15 @@ class ExecutionEngine(
             ActionKind.SWIPE -> ui.swipe(step.locator, step.gestureDurationMs) to "Approved normalized swipe"
             ActionKind.ENTER_TEXT -> ui.enterText(step.locator, step.authorizedTestText) to "Set explicit test data (not logged)"
             ActionKind.PRESS_BACK -> {
-                if (TouchPolicy.isTouch(preset) && prepareTouch(preset, pkg, step.timeoutMs).first == null)
+                if (TouchPolicy.isTouch(preset) && step.expectsKeyboard == true) {
+                    val binding = TouchPolicy.profile(preset, pkg)
+                    fun ready(): Boolean = binding != null && TouchEnvironment.keyboardVisible(service) &&
+                        TouchEnvironment.appViewport(service, binding)?.let { step.touchWindow == null || it == step.touchWindow } == true
+                    val found = timing.poll(step.timeoutMs) { ready() }
+                    gate()
+                    if (!found || !ready()) false to "TOUCH_KEYBOARD_BACK_BLOCKED: keyboard/app changed; no Back sent"
+                    else service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) to "Back: close recorded keyboard"
+                } else if (TouchPolicy.isTouch(preset) && prepareTouch(preset, pkg, step.timeoutMs, keyboard = step.expectsKeyboard, window = step.touchWindow).first == null)
                     false to "TOUCH_BACK_BLOCKED: foreground/geometry not ready"
                 else service.performGlobalAction(AccessibilityService.GLOBAL_ACTION_BACK) to "Back"
             }

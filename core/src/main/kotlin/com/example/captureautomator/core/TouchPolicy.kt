@@ -94,7 +94,7 @@ object TouchPolicy {
                 widthPx = current.screenWidth, heightPx = current.screenHeight, densityDpi = current.densityDpi),
             touchProfile = current, touchProfiles = profiles, createdAtEpochMs = System.currentTimeMillis(), modifiedAtEpochMs = System.currentTimeMillis(),
             steps = preset.steps.map { step -> step.copy(id = java.util.UUID.randomUUID().toString(),
-                needsReview = false, classificationUncertain = false,
+                needsReview = false, classificationUncertain = false, touchWindow = null,
                 touchStroke = if (step.kind == ActionKind.RECORDED_TOUCH) strokes[index++] else step.touchStroke) })
         require(PresetValidation.canExecute(copy).isEmpty()) { PresetValidation.canExecute(copy).joinToString("; ") }
         return copy

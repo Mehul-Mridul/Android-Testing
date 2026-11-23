@@ -1,0 +1,15 @@
+3P Capture Automator 0.6.4-dev (version code 12)
+
+Use 3P-Capture-Automator-0.6.4-dev.apk for normal use.
+The debug APK is for diagnostics. Both use a local development key, not a Play Store production key.
+
+Certificate SHA-256:
+48bd3b4b11fefe1bccd94453a30cb9d6be6a1ad54244c1db41d840613de86c46
+
+Check SHA256SUMS.txt or artifact-manifest.json. Install as an UPDATE over the matching-signature app. Do not uninstall or clear app storage; that can erase presets/history. If Android reports a signature mismatch, stop and export presets before considering a separate installation. Never bypass Android's signing/protection checks.
+
+The exact normal release APK is already installed on the inspected iQOO phone. If Accessibility becomes disconnected after a later update, reconnect the existing Automator service through Android Settings. Keep the existing media permissions needed for verification; this release requests no new permissions.
+
+Record one app per preset. Include the complete local save/discard sequence. Wait for the controls/Ready after forwarding each touch. Keyboard typing and passwords pass to Android and are never recorded/replayed. Use the floating Back to record keyboard dismissal; drag the controls if they cover an app button.
+
+Match the recorded device, orientation, app version, window and keyboard configuration before replay. Existing presets are not silently modified. Create a newly recorded copy if the earlier recording missed keyboard transitions. Samsung/OEM and third-party workflows are not universally certified.

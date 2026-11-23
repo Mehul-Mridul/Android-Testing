@@ -223,10 +223,10 @@ class UiResolver(private val service: AutomationAccessibilityService,
         val description = GestureDescription.Builder().addStroke(
             GestureDescription.StrokeDescription(path, 0, stroke.durationMs)).build()
         val deferred = CompletableDeferred<Boolean>()
-        onDispatch()
         currentCoroutineContext().ensureActive()
         if (!ready() || !TouchEnvironment.avoidsInput(service, profile, stroke))
             return false to "TOUCH_INCOMPATIBLE: window or input field changed before dispatch"
+        onDispatch()
         val dispatched = service.dispatchGesture(description, object : AccessibilityService.GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) { deferred.complete(true) }
             override fun onCancelled(gestureDescription: GestureDescription?) { deferred.complete(false) }

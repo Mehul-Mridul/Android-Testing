@@ -1,0 +1,10 @@
+{
+  "result": "PASS",
+  "controlsSurvivedKeyboard": true,
+  "frameRetained": true,
+  "recordedKeyboardBack": true,
+  "continuedAfterKeyboard": true,
+  "steps": 6,
+  "postedOrSent": false,
+  "typedText": false
+}

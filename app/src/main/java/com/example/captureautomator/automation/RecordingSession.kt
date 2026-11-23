@@ -28,6 +28,7 @@ data class RecordingDraft(
     val touchProfile: TouchProfile? = null,
     val recordingIssue: String? = null,
     val touchProfiles: List<TouchProfile>? = null,
+    val keyboardSeen: Boolean = false,
     val activeTouchPackage: String? = null
 )
 
@@ -110,7 +111,11 @@ object RecordingSession {
             activeTouchPackage = profile.packageName, steps = draft.steps + transition)
         if (previous != profile.packageName || updated != profiles) persist(context)
     }
-    fun recordTouch(context: Context, stroke: TouchStroke, delayMs: Long, popup: Boolean?): String? {
+    fun noteKeyboard(context: Context) {
+        val draft = mutable.value ?: return
+        if (draft.active && !draft.keyboardSeen) { mutable.value = draft.copy(keyboardSeen = true); persist(context) }
+    }
+    fun recordTouch(context: Context, stroke: TouchStroke, delayMs: Long, popup: Boolean?, keyboard: Boolean? = null, window: TouchViewport? = null): String? {
         val draft = mutable.value ?: return null
         if (!draft.active || draft.paused || draft.playbackMode != PlaybackMode.RECORDED_TOUCHES) return null
         if (draft.steps.size >= 1000 || draft.steps.sumOf { it.touchStroke?.points?.size ?: 0 } + stroke.points.size > 20_000) {
@@ -119,7 +124,7 @@ object RecordingSession {
         }
         val step = AutomationStep(label = if (stroke.points.size > 1) "Recorded swipe" else if (stroke.durationMs >= 500) "Recorded hold" else "Recorded tap",
             kind = ActionKind.RECORDED_TOUCH, packageName = draft.activeTouchPackage ?: draft.apps.first().packageName,
-            touchStroke = stroke, expectsPopup = popup, maxAttempts = 1, interActionDelayMs = delayMs,
+            touchStroke = stroke, expectsPopup = popup, expectsKeyboard = keyboard, touchWindow = window, maxAttempts = 1, interActionDelayMs = delayMs,
             capturedAtEpochMs = System.currentTimeMillis(), needsReview = true)
         addStep(context, step)
         return step.id
@@ -130,10 +135,10 @@ object RecordingSession {
         }) }
         persist(context)
     }
-    fun recordTouchBack(context: Context, delayMs: Long) {
+    fun recordTouchBack(context: Context, delayMs: Long, keyboard: Boolean? = null, window: TouchViewport? = null) {
         val draft = mutable.value ?: return
         if (draft.active && !draft.paused) addStep(context, AutomationStep(label = "Recorded Back",
-            kind = ActionKind.PRESS_BACK, packageName = draft.activeTouchPackage ?: draft.apps.first().packageName,
+            kind = ActionKind.PRESS_BACK, expectsKeyboard = keyboard, touchWindow = window, packageName = draft.activeTouchPackage ?: draft.apps.first().packageName,
             maxAttempts = 1, interActionDelayMs = delayMs))
     }
     fun stopWithIssue(context: Context, issue: String) {
@@ -159,6 +164,7 @@ object RecordingSession {
     fun toPreset(): Preset? = mutable.value?.takeIf { !it.active }?.let { draft ->
         Preset(schemaVersion = if (draft.playbackMode == PlaybackMode.RECORDED_TOUCHES) 2 else 1,
             name = draft.name, apps = draft.apps, recordedDevice = draft.device,
+            description = if (draft.keyboardSeen) "Keyboard input was not recorded. Only app touches, Back and timing are replayed." else "",
             media = draft.media, steps = draft.steps + AutomationStep(label = "Verify captured media",
                 kind = ActionKind.VERIFY_MEDIA, packageName = draft.apps.first().packageName), createdAtEpochMs = draft.startedAt,
             playbackMode = draft.playbackMode ?: PlaybackMode.SMART_CONTROLS, touchProfile = draft.touchProfile,

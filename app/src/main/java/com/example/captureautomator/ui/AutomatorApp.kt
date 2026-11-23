@@ -396,6 +396,8 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
             Text(status, style = MaterialTheme.typography.bodySmall)
         }
         draft.recordingIssue?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        if (draft.keyboardSeen) Text("Keyboard typing is not recorded or replayed. App touches before and after it are retained.",
+            style = MaterialTheme.typography.bodySmall)
         Text("${draft.steps.size} observed steps · ${draft.apps.joinToString { it.displayName }}")
         if (draft.active) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             StudioOutline(onClick = onPause) { Text(if (draft.paused) "Resume" else "Pause") }

@@ -14,6 +14,14 @@ object PresetValidation {
                 errors += "Each selected application needs exactly one touch profile"
             var activeApp: String? = preset.apps.firstOrNull()?.packageName
             preset.steps.forEach { step ->
+                step.touchWindow?.let { window ->
+                    val binding = TouchPolicy.profile(preset, step.packageName)
+                    if (binding == null || window.width < 2 || window.height < 2 ||
+                        window.left < binding.left || window.top < binding.top ||
+                        window.left.toLong() + window.width > binding.left.toLong() + binding.width ||
+                        window.top.toLong() + window.height > binding.top.toLong() + binding.height)
+                        errors += "Touch step has invalid app-window geometry"
+                }
                 if (step.kind == ActionKind.LAUNCH_APP) activeApp = step.packageName
                 if (step.kind in setOf(ActionKind.RECORDED_TOUCH, ActionKind.PRESS_BACK) &&
                     (step.packageName == null || step.packageName != activeApp))

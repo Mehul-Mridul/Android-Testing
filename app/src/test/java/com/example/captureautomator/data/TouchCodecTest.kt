@@ -40,4 +40,14 @@ class TouchCodecTest {
         assertTrue(PresetValidation.canExecute(loaded).isEmpty())
         assertEquals(Outcome.FAIL, Verdict.outcome(emptyList(), MediaResult(0, 0, true), loaded.media))
     }
+    @Test fun keyboardGeometryRoundTripAndLegacyDefaults() {
+        val old = Codec.parsePreset(Codec.export(raw()))
+        assertNull(old.steps.single().expectsKeyboard)
+        assertNull(old.steps.single().touchWindow)
+        val step = raw().steps.single().copy(expectsKeyboard = true,
+            touchWindow = TouchViewport(0, 90, 1080, 1300))
+        val updated = raw().copy(steps = listOf(step))
+        assertEquals(updated, Codec.parsePreset(Codec.export(updated)))
+        assertFalse(Codec.export(updated).contains("typedText"))
+    }
 }

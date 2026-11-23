@@ -84,6 +84,10 @@ data class AutomationStep(
     /** Reference timing only; known camera STOP is scheduled from the configured media duration. */
     val recordedVideoDurationMs: Long = 0,
     val expectsPopup: Boolean? = null,
+    /** Optional for older presets. Keyboard presence only, never key/text contents. */
+    val expectsKeyboard: Boolean? = null,
+    /** Visible app rectangle for this step; keyboard resize never rescales coordinates. */
+    val touchWindow: TouchViewport? = null,
     val minimumSavedBeforeLaunch: Int? = null,
     val touchStroke: TouchStroke? = null
 )

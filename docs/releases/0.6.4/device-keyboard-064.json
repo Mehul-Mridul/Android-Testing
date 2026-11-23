@@ -1,0 +1,15 @@
+{
+  "checks": [
+    "controls and coordinate anchor survive keyboard opening",
+    "native keyboard tap does not enter the touch recording",
+    "app button above keyboard records and closes keyboard",
+    "non-password focus tap and recorded keyboard Back allow later touches",
+    "Pause and Resume remain accessible with keyboard visible",
+    "Stop retains draft with geometry-only keyboard state and no text actions",
+    "recorded focus keyboard Done Back and counter sequence replays successfully",
+    "recording can start with an already-open keyboard",
+    "password field excluded and same-app keyboard dialog does not end recording"
+  ],
+  "result": "PASS",
+  "recordedSteps": 8
+}

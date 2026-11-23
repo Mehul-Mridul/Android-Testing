@@ -1,0 +1,20 @@
+{
+  "version": "0.6.4-dev",
+  "versionCode": 12,
+  "installedSha256": "263b2f887beedd0701de2092ba2f15262ced8153d97e2a9d72285c1e67bc4d67",
+  "releaseFileExactlyMatches": true,
+  "accessibilityConnected": true,
+  "testHarnessRemoved": true,
+  "keyboardFixtureRemoved": true,
+  "originalRotationRestored": true,
+  "normalApkSmoke": {
+    "result": "PASS",
+    "keyboardControlsVisible": true,
+    "recordedBack": true,
+    "counterBefore": 6,
+    "counterAfter": 7,
+    "stopReturnedToReview": true,
+    "observedSteps": 5,
+    "unsavedTestDraftDiscarded": true
+  }
+}

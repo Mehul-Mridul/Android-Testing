@@ -11,6 +11,7 @@ import android.widget.Button
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.example.captureautomator.core.TouchProfile
+import com.example.captureautomator.core.TouchViewport
 
 /** Trusted, visible Accessibility overlays. No SYSTEM_ALERT_WINDOW permission is requested. */
 internal class TouchWindows(private val service: AutomationAccessibilityService) {
@@ -18,22 +19,31 @@ internal class TouchWindows(private val service: AutomationAccessibilityService)
     private val attached = mutableSetOf<View>()
     private var lastBarX: Int? = null
     private var lastBarY: Int? = null
+    var controlsDragging = false
+        private set
+    fun controlBounds(area: TouchViewport, actionCount: Int): TouchViewport {
+        val width=minOf(area.width,dp(if(actionCount>3)340 else 300))
+        val x=(lastBarX ?: (area.left+(area.width-width)/2)).coerceIn(area.left,area.left+area.width-width)
+        val y=(lastBarY ?: area.top).coerceIn(area.top,maxOf(area.top,area.top+area.height-dp(50)))
+        return TouchViewport(x,y,width,dp(50))
+    }
     fun dp(value: Int) = (value * service.resources.displayMetrics.density).toInt()
     private fun params(width: Int, height: Int, x: Int, y: Int) = WindowManager.LayoutParams(
         width, height, WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
         android.graphics.PixelFormat.TRANSLUCENT).apply {
+        softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING
         gravity = Gravity.TOP or Gravity.LEFT
         this.x = x; this.y = y
         if (Build.VERSION.SDK_INT >= 30) setFitInsetsTypes(0)
     }
-    fun addCanvas(view: View, profile: TouchProfile) {
+    fun addCanvas(view: View, profile: TouchProfile, area: TouchViewport = TouchViewport(profile.left, profile.top, profile.width, profile.height)) {
         if (view in attached) return
         view.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
-        wm.addView(view, params(profile.width, profile.height, profile.left, profile.top))
+        wm.addView(view, params(area.width, area.height, area.left, area.top))
         attached += view
     }
-    fun bar(profile: TouchProfile, title: String, actions: List<Pair<String, () -> Unit>>): Pair<View, TextView> {
+    fun bar(profile: TouchProfile, title: String, actions: List<Pair<String, () -> Unit>>, area: TouchViewport = TouchViewport(profile.left, profile.top, profile.width, profile.height)): Pair<View, TextView> {
         val row = LinearLayout(service).apply {
             orientation = LinearLayout.HORIZONTAL
             background = android.graphics.drawable.GradientDrawable(
@@ -62,23 +72,24 @@ internal class TouchWindows(private val service: AutomationAccessibilityService)
                 setOnClickListener { action() }
             }, LinearLayout.LayoutParams(dp(53), dp(44)))
         }
-        val width = minOf(profile.width, dp(if (actions.size > 3) 340 else 300))
-        val layout = params(width, WindowManager.LayoutParams.WRAP_CONTENT,
-            (lastBarX ?: (profile.left + (profile.width - width) / 2)).coerceIn(profile.left, profile.left + profile.width - width),
-            (lastBarY ?: profile.top).coerceIn(profile.top, maxOf(profile.top, profile.top + profile.height - dp(50))))
+        val control = controlBounds(area,actions.size)
+        val width = control.width
+        val layout = params(width, WindowManager.LayoutParams.WRAP_CONTENT, control.left, control.top)
         var downX = 0f; var downY = 0f; var originalX = 0; var originalY = 0
         label.setOnTouchListener { _, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    controlsDragging = true
                     downX = event.rawX; downY = event.rawY; originalX = layout.x; originalY = layout.y
                 }
                 MotionEvent.ACTION_MOVE -> {
-                    layout.x = (originalX + event.rawX - downX).toInt().coerceIn(profile.left, profile.left + profile.width - width)
-                    layout.y = (originalY + event.rawY - downY).toInt().coerceIn(profile.top,
-                        maxOf(profile.top, profile.top + profile.height - row.height))
+                    layout.x = (originalX + event.rawX - downX).toInt().coerceIn(area.left, area.left + area.width - width)
+                    layout.y = (originalY + event.rawY - downY).toInt().coerceIn(area.top,
+                        maxOf(area.top, area.top + area.height - row.height))
                     lastBarX = layout.x; lastBarY = layout.y
                     if (row in attached) wm.updateViewLayout(row, layout)
                 }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> controlsDragging = false
             }
             true
         }
@@ -88,5 +99,5 @@ internal class TouchWindows(private val service: AutomationAccessibilityService)
     fun remove(view: View?) {
         if (view != null && attached.remove(view)) runCatching { wm.removeViewImmediate(view) }
     }
-    fun close() { attached.toList().forEach(::remove) }
+    fun close() { controlsDragging = false; attached.toList().forEach(::remove) }
 }
