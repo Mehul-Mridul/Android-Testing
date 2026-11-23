@@ -1,0 +1,15 @@
+{
+  "build": "0.6.3-dev normal signed APK",
+  "instrumentationRunning": false,
+  "removedOwnRootTaskId": 2319,
+  "ownTaskContainedOnlyAutomator": true,
+  "processIdBefore": "6441",
+  "processIdAfterTaskRemoval": "6441",
+  "foregroundServiceWasActive": true,
+  "foregroundServiceStoppedAfterBatch": true,
+  "fixtureCounterBefore": 31,
+  "fixtureCounterAfter": 33,
+  "twoRealButtonClicks": true,
+  "uiResultVisuallyVerified": "2/2 Batch finished; both diagnostic presets PASS; final cleanup accepted",
+  "restartAfterStop": true
+}

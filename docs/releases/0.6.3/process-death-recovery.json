@@ -1,0 +1,32 @@
+{
+  "case": "controlled process death during fixture wait",
+  "ready": {
+    "sessionId": "8b83f24d-38bd-4431-8753-a511af0d9cfb",
+    "phase": "RUNNING_PRESET"
+  },
+  "before": {
+    "active": true,
+    "completedReportIds": [],
+    "phase": "RUNNING_PRESET",
+    "position": 1,
+    "sessionId": "8b83f24d-38bd-4431-8753-a511af0d9cfb",
+    "total": 3
+  },
+  "after": {
+    "active": false,
+    "completedReportIds": [],
+    "phase": "INTERRUPTED",
+    "position": 1,
+    "sessionId": "8b83f24d-38bd-4431-8753-a511af0d9cfb",
+    "total": 3
+  },
+  "fixtureCounterBefore": {
+    "main": 29
+  },
+  "fixtureCounterAfter": {
+    "main": 29
+  },
+  "automaticTouchesAfterRecovery": 0,
+  "result": "PASS",
+  "instrumentationAbort": "expected because host deliberately stopped its target process"
+}

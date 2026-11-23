@@ -4,17 +4,19 @@ Android touch recording and playback for authorised app testing.
 
 ## Latest APK and documents
 
-**[Download 0.6.2-dev and all supporting files](https://github.com/Mehul-Mridul/Android-Testing/releases/tag/v0.6.2-dev)** · **[Logo update](docs/releases/0.6.2/Release-notes.md)** · **[Repair and validation report](docs/releases/0.6.1/Repair-report.md)** · **[Installation instructions](docs/releases/0.6.1/INSTALL.txt)**
+**[Download 0.6.3-dev and supporting files](https://github.com/Mehul-Mridul/Android-Testing/releases/tag/v0.6.3-dev)** · **[Batch repair and physical test report](docs/releases/0.6.3/Batch-repair-status.md)** · **[Logo sources](branding/)**
 
-Version **0.6.2-dev (version code 10)** adds the mint camera/play logo, adaptive launcher icons, Android themed icons and a matching notification icon. It includes the landscape cleanup, Instagram popup and batch selection fixes from 0.6.1. It is a development prerelease for authorised testing.
+Version **0.6.3-dev (version code 11)** fixes the batch Stop lock, cancellation sequencing, stale notification Stop intents and execution across removal of Automator’s own task. A visible foreground session runs during an explicit batch, and process interruption never automatically replays captures. It includes the logo from 0.6.2 and capture/popup/cleanup fixes from 0.6.1.
+
+**61 automated tests**, lint and debug/release builds passed. Phone testing on iQOO 9T / Android 14 passed Stop/restart, pause/resume, Accessibility interruption, a three-preset run after own-task removal, and controlled process-death recovery. The normal APK was also tested without instrumentation: two presets continued after task removal; Stop unlocked execution; a fresh batch passed again. Test counters confirmed real clicks and no automatic replay. See the report for exact scope and evidence.
+
+Samsung firmware and all third-party camera/social workflows are not physically certified by these control-flow checks. Android can still terminate a force-stopped app, and locked/protected tasks can remain in Recents. Prior capture-specific evidence is retained under `docs/releases/0.6.1/`.
 
 ![Capture Automator logo](branding/capture-automator-logo.png)
 
-For the 0.6.1 capture fixes, 49 automated tests, Android lint, debug/release builds and the [source build in GitHub Actions](https://github.com/Mehul-Mridul/Android-Testing/actions/runs/45061885965) passed. Physical checks on an iQOO 9T / Android 14 verified a new Instagram photo, Discard playback, two cleanup-enabled batch presets and landscape cleanup. Samsung phones/tablets and other social apps were not physically certified by these checks. The final normal APK was installed and opened; workflow evidence was collected using the debug build. See the report for exact scope, run IDs, known limitations and the disclosed test incident.
-
 ## Install and record
 
-1. Download `3P-Capture-Automator-0.6.2-dev.apk` from Releases. Use the debug APK only for diagnostics.
+1. Download `3P-Capture-Automator-0.6.3-dev.apk` from Releases. Use the debug APK only for diagnostics.
 2. Update the matching-signature app without uninstalling or clearing storage. If Android reports a signature mismatch, stop and export presets before considering a different installation. The APK uses a local development signing key; certificate details and checksums are supplied with the release.
 3. Enable Automator Accessibility through Android Settings, and grant the photo/video access needed for verification. After an update, reconnect Accessibility if Android leaves it disconnected. No protection bypass is provided.
 4. Choose **Record new automation** and record one app at a time. Touch paths and timing are saved; app opening, Back and Recents use Accessibility assistance. Keep keyboard and password entry outside recordings.
@@ -39,7 +41,7 @@ The debug APK is written to `app/build/outputs/apk/debug/`. The normal release b
 
 - `core/`: preset schemas, playback policy, validation and JVM tests.
 - `app/`: Compose UI, explicit touch recorder, Accessibility-assisted playback, MediaStore verification, Room storage and batch execution.
-- `docs/releases/0.6.1/`: versioned repair findings, installation, automated and physical evidence, build logs, signatures and checksums.
+- `docs/releases/`: versioned repair findings, installation, automated and physical evidence, build logs, signatures and checksums.
 - Release assets: normal/debug APKs, exact app-source archive, patch and full document bundle.
 - Other files under `docs/` include earlier design/feasibility material; versioned release evidence describes the current validation scope.
 

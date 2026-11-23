@@ -156,6 +156,24 @@ class BatchDeviceTest {
         }
     }
 
+    /** Creates only two labelled temporary fixture presets for testing the normal APK
+     * without instrumentation keeping its process alive. Host removes these via app UI. */
+    @Test fun prepareNormalApkSmoke() = runBlocking {
+        withContext(Dispatchers.Main) {
+            connected()
+            val repository = PresetRepository(context)
+            val original = repository.presets.first().associate { it.id to it.json }
+            val base = fixture(repository)
+            val added = listOf("Diagnostic-batch-063-A", "Diagnostic-batch-063-B").map { name ->
+                base.copy(id = UUID.randomUUID().toString(), name = name, folder = "Temporary device tests")
+            }
+            added.forEach { repository.save(it) }
+            val remaining = repository.presets.first { rows -> rows.size == original.size + 2 }
+            assertEquals(original, remaining.filter { it.id in original }.associate { it.id to it.json })
+            File(context.filesDir, "device-normal-smoke-presets.json").writeText(Codec.gson.toJson(added))
+        }
+    }
+
     /** Explicitly selected by the host, which intentionally kills the test process once ready.
      * An instrumentation abort is expected for this scenario, not a failed normal matrix. */
     @Test fun controlledProcessDeath() = runBlocking<Unit> {

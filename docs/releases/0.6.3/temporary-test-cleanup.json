@@ -1,0 +1,9 @@
+{
+  "removedOnlyTemporaryPresets": [
+    "Diagnostic-batch-063-A",
+    "Diagnostic-batch-063-B"
+  ],
+  "filteredSearchEmptyAfterRemoval": true,
+  "originalPresetCountBeforeTests": 5,
+  "originalPresetContentsVerifiedUnchangedByMatrix": true
+}

@@ -1,0 +1,9 @@
+{
+  "build": "normal signed APK",
+  "stopEntry": "explicit Stop control intent",
+  "counterBefore": 31,
+  "counterAfterStop": 31,
+  "noTouchesAfterStop": true,
+  "foregroundSessionEnded": true,
+  "hostObservedStopAndScreenSettleMs": 1485
+}
