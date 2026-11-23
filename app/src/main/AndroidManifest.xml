@@ -17,6 +17,7 @@
         <package android:name="com.campmobile.snow" />
     </queries>
     <application android:label="3P Capture Automator" android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher" android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
         android:usesCleartextTraffic="false">
         <activity android:name=".ui.MainActivity" android:exported="true"

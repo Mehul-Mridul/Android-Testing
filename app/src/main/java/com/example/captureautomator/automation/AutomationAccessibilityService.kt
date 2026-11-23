@@ -81,7 +81,7 @@ class AutomationAccessibilityService : AccessibilityService() {
         val stopPending = PendingIntent.getActivity(this, 11, stop,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification: Notification = NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_camera)
+            .setSmallIcon(com.example.captureautomator.R.drawable.ic_notification_capture)
             .setContentTitle(if (recording) "3P recording active" else "3P test running")
             .setContentText(name)
             .setOngoing(true)

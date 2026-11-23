@@ -1,0 +1,14 @@
+package: name='com.example.captureautomator' versionCode='10' versionName='0.6.2-dev' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'
+application-icon-160:'res/IG.xml'
+application-icon-240:'res/IG.xml'
+application-icon-320:'res/IG.xml'
+application-icon-65534:'res/IG.xml'
+application: label='3P Capture Automator' icon='res/IG.xml'
+N: android=http://schemas.android.com/apk/res/android (line=2)
+  E: adaptive-icon (line=2)
+      E: background (line=3)
+        A: http://schemas.android.com/apk/res/android:drawable(0x01010199)=@0x7f040006
+      E: foreground (line=4)
+        A: http://schemas.android.com/apk/res/android:drawable(0x01010199)=@0x7f040007
+      E: monochrome (line=5)
+        A: http://schemas.android.com/apk/res/android:drawable(0x01010199)=@0x7f040008

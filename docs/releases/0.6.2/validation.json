@@ -1,0 +1,17 @@
+{
+  "versionName": "0.6.2-dev",
+  "versionCode": 10,
+  "automatedTests": {
+    "tests": 49,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "build": "debug and release successful; lint successful",
+  "signedApkMatchesUnsignedBuildPayload": true,
+  "appIcon": "custom adaptive camera/play icon",
+  "android13ThemedLayer": "monochrome resource present in compiled v33 adaptive icon",
+  "notificationIcon": "custom monochrome vector",
+  "physicalVerification": "No new device playback or launcher test performed for this branding update",
+  "certificateSha256": "48bd3b4b11fefe1bccd94453a30cb9d6be6a1ad54244c1db41d840613de86c46"
+}
