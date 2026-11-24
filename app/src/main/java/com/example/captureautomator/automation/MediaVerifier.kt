@@ -12,18 +12,27 @@ import androidx.core.content.ContextCompat
 import com.example.captureautomator.core.MediaExpectation
 import com.example.captureautomator.core.MediaResult
 import com.example.captureautomator.core.PlaybackTiming
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.ensureActive
 import com.example.captureautomator.core.pollMedia
 import com.example.captureautomator.core.isNewRunMedia
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import android.os.CancellationSignal
+import com.example.captureautomator.core.BoundedReadExecutor
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
 /** Only validates accessible, newly-created shared media; private app stores are UNVERIFIABLE. */
 class MediaVerifier(private val context: Context) {
-    /** At most 31 scans / 15s of polling delay, with a 20s wall-clock coroutine deadline.
+    companion object { private val reads = BoundedReadExecutor() }
+    private fun checkRead(signal: CancellationSignal) {
+        signal.throwIfCanceled()
+        if(Thread.currentThread().isInterrupted) throw java.io.InterruptedIOException("Media read cancelled")
+    }
+    private suspend fun <T> read(action: (CancellationSignal) -> T): T? = withTimeoutOrNull(8000) {
+        val signal=CancellationSignal()
+        reads.read(onCancel = { signal.cancel() }) { action(signal) }
+    }
+    /** At most 61 scans / 60s of polling delay, with a hard coroutine deadline.
+     * Each native/provider read also has an 8s bound and cancellation signal.
      * The baseline is immutable and captured before any action. Never recapture it on retries.
      */
     suspend fun poll(baseline: Snapshot, expected: MediaExpectation, targetPackages: Set<String>,
@@ -36,17 +45,19 @@ class MediaVerifier(private val context: Context) {
 
     suspend fun waitForSaved(base: Snapshot, expected: MediaExpectation, pkg: String, since: Long,
                              minimum: Int, timing: PlaybackTiming): Int {
+        return withTimeoutOrNull(65_500) {
         var previous = emptyList<String>()
         var stable = 0
         repeat(61) {
             timing.waitMs(0)
             val evidence = verify(base, expected, setOf(pkg), since).mediaEvidence.sorted()
             stable = if (evidence.size >= minimum && evidence == previous) stable + 1 else 0
-            if (stable >= 2) return evidence.size
+            if (stable >= 2) return@withTimeoutOrNull evidence.size
             previous = evidence
             if (it < 60) timing.waitMs(1000)
         }
-        return 0
+        0
+        } ?: 0
     }
 
     data class MediaFile(
@@ -56,7 +67,8 @@ class MediaVerifier(private val context: Context) {
         val addedSeconds: Long,
         val size: Long,
         val mime: String,
-        val ownerPackage: String?
+        val ownerPackage: String?,
+        val pending: Boolean
     )
     data class Snapshot(val ids: Set<String>, val fullPermission: Boolean, val readable: Boolean)
 
@@ -70,10 +82,14 @@ class MediaVerifier(private val context: Context) {
         else -> granted(Manifest.permission.READ_EXTERNAL_STORAGE)
     }
 
-    suspend fun baseline(): Snapshot = withContext(Dispatchers.IO) {
-        val full = fullMediaPermission()
-        val files = runCatching { queryAll(includePending = true) }
-        Snapshot(files.getOrNull()?.map { key(it) }?.toSet().orEmpty(), full, files.isSuccess)
+    suspend fun baseline(): Snapshot {
+        val full=fullMediaPermission()
+        return try { read { signal ->
+            val files=runCatching { queryAll(includePending=true,signal=signal) }
+            Snapshot(files.getOrNull()?.map { key(it) }?.toSet().orEmpty(),full,files.isSuccess)
+        } ?: Snapshot(emptySet(),full,false) }
+        catch(e: kotlinx.coroutines.CancellationException) { throw e }
+        catch(_: Exception) { Snapshot(emptySet(),full,false) }
     }
 
     suspend fun verify(
@@ -81,14 +97,15 @@ class MediaVerifier(private val context: Context) {
         expected: MediaExpectation,
         targetPackages: Set<String>,
         startedAtEpochMs: Long
-    ): MediaResult = withContext(Dispatchers.IO) {
-        if (!baseline.fullPermission || !fullMediaPermission()) return@withContext MediaResult(
+    ): MediaResult {
+        return try { read { signal ->
+        if (!baseline.fullPermission || !fullMediaPermission()) return@read MediaResult(
             verificationComplete = false,
             issues = listOf("Full photo/video access not granted; partial selection cannot verify new third-party captures"))
-        if (!baseline.readable) return@withContext MediaResult(verificationComplete = false,
+        if (!baseline.readable) return@read MediaResult(verificationComplete = false,
             issues = listOf("Could not read the pre-run media inventory"))
-        val all = runCatching { queryAll() }.getOrElse {
-            return@withContext MediaResult(verificationComplete = false,
+        val all = runCatching { queryAll(includePending=true,signal=signal) }.getOrElse {
+            return@read MediaResult(verificationComplete = false,
                 issues = listOf("MediaStore scan failed: ${it.javaClass.simpleName}"))
         }
         // DATE_ADDED is seconds: reject files that predate the run, even when missing from baseline.
@@ -96,11 +113,14 @@ class MediaVerifier(private val context: Context) {
         val recent = all.filter { isNewRunMedia(key(it), baseline.ids, it.addedSeconds, startSeconds) }
         val issues = mutableListOf<String>()
         val evidence = mutableListOf<String>()
+        val saveEvidence = mutableListOf<String>()
+        var pending=0
+        var unreadable=0
         var fullyAttributable = true
         var validPhotos = 0
         var validVideos = 0
         for (file in recent) {
-            currentCoroutineContext().ensureActive()
+            checkRead(signal)
             val owner = file.ownerPackage
             if (owner != null && owner !in targetPackages) continue
             if (owner == null || owner !in targetPackages) {
@@ -108,8 +128,13 @@ class MediaVerifier(private val context: Context) {
                 issues += "Cannot establish target-app ownership for: ${file.uri} (reported owner: ${owner ?: "unknown"})"
             }
             if (owner == null) continue
-            if (file.size <= 0) { issues += "Empty target file: ${file.uri}"; continue }
+            if (file.pending) { pending++;issues += "Target media is still being saved";continue }
+            if (file.size <= 0) { unreadable++; issues += "Empty target file: ${file.uri}"; continue }
             val validator = if (file.isVideo) validateVideo(file, expected) else validatePhoto(file)
+            // A duration mismatch is a verification failure, not evidence of an unfinished save.
+            val finalized = validator == null || validator.startsWith("Video duration ")
+            if(finalized) saveEvidence += "${key(file)}:${file.size}"
+            else unreadable++
             if (validator != null) {
                 issues += "${file.uri}: $validator"
             } else {
@@ -120,16 +145,21 @@ class MediaVerifier(private val context: Context) {
         if (validPhotos != expected.photos) issues += "Expected ${expected.photos} photos; found $validPhotos valid new shared photos. Confirm each local save and the preset photo count"
         if (validVideos != expected.videos) issues += "Expected ${expected.videos} videos; found $validVideos valid new videos"
         MediaResult(validPhotos, validVideos, fullyAttributable,
-            issues.distinct(), evidence)
+            issues.distinct(), evidence, pendingTargetFiles=pending, unreadableTargetFiles=unreadable,
+            saveEvidence=saveEvidence.sorted())
+        } ?: MediaResult(issues=listOf("Media read timed out; capture state was not confirmed"),unreadableTargetFiles=1) }
+        catch(e: kotlinx.coroutines.CancellationException) { throw e }
+        catch(e: Exception) { MediaResult(issues=listOf("Media read unavailable: ${e.javaClass.simpleName}"),unreadableTargetFiles=1) }
     }
 
     private fun key(file: MediaFile): String = "${if (file.isVideo) "v" else "p"}:${file.id}"
 
-    private fun queryAll(includePending: Boolean = false): List<MediaFile> =
-        query(false, includePending) + query(true, includePending)
+    private fun queryAll(includePending: Boolean = false, signal: CancellationSignal): List<MediaFile> =
+        query(false, includePending,signal) + query(true, includePending,signal)
 
     @Suppress("DEPRECATION")
-    private fun query(video: Boolean, includePending: Boolean): List<MediaFile> {
+    private fun query(video: Boolean, includePending: Boolean, signal: CancellationSignal): List<MediaFile> {
+        checkRead(signal)
         val baseCollection = if (video) MediaStore.Video.Media.EXTERNAL_CONTENT_URI
                          else MediaStore.Images.Media.EXTERNAL_CONTENT_URI
         val collection = if (includePending) MediaStore.setIncludePending(baseCollection) else baseCollection
@@ -145,7 +175,7 @@ class MediaVerifier(private val context: Context) {
         // Pre-run inventory covers last 24 hours. Older files must not be attributed to the run.
         val earliest = TimeUnit.MILLISECONDS.toSeconds(System.currentTimeMillis()) - 86_400
         context.contentResolver.query(collection, projection,
-            "${MediaStore.MediaColumns.DATE_ADDED} >= ?", arrayOf(earliest.toString()), null)?.use { cursor ->
+            "${MediaStore.MediaColumns.DATE_ADDED} >= ?", arrayOf(earliest.toString()), null,signal)?.use { cursor ->
             val idxId = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns._ID)
             val idxDate = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.DATE_ADDED)
             val idxSize = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.SIZE)
@@ -153,12 +183,13 @@ class MediaVerifier(private val context: Context) {
             val idxOwner = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.OWNER_PACKAGE_NAME)
             val idxPending = cursor.getColumnIndexOrThrow(MediaStore.MediaColumns.IS_PENDING)
             while (cursor.moveToNext()) {
+                checkRead(signal)
                 if (!includePending && cursor.getInt(idxPending) != 0) continue
                 val id = cursor.getLong(idxId)
                 val uri = android.content.ContentUris.withAppendedId(collection, id)
                 results += MediaFile(id, video, uri, cursor.getLong(idxDate),
                     cursor.getLong(idxSize), cursor.getString(idxMime).orEmpty(),
-                    cursor.getString(idxOwner))
+                    cursor.getString(idxOwner),cursor.getInt(idxPending)!=0)
             }
         } ?: throw IllegalStateException("MediaStore collection unavailable")
         return results

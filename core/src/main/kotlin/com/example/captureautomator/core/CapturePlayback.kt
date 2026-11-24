@@ -57,16 +57,28 @@ suspend fun pollMedia(
     var last = MediaResult(issues = listOf("Media verification timed out before first scan"))
     var previousEvidence: List<String>? = null
     var stable = 0
+    var saveStable = 0
+    var previousSaved: List<String>? = null
     val completed = withTimeoutOrNull(maxScans * intervalMs + 4_500) {
         for (index in 0 until maxScans) {
             timing.waitMs(0)
             last = scan()
+            val saved = last.saveEvidence.ifEmpty { last.mediaEvidence }
+            val readable = saved.isNotEmpty() && last.pendingTargetFiles == 0 && last.unreadableTargetFiles == 0
+            saveStable = if (readable && saved == previousSaved) saveStable + 1 else 0
+            previousSaved = saved
+            last = last.copy(savedMediaStable = readable && saveStable >= 2)
             onScan(index + 1, last)
             val exact = last.verificationComplete && last.issues.isEmpty() &&
                 last.photosFound == expected.photos && last.videosFound == expected.videos
             stable = if (exact && last.mediaEvidence == previousEvidence) stable + 1 else 0
             previousEvidence = last.mediaEvidence
             if (exact && stable >= 2) return@withTimeoutOrNull true
+            // Extra finalized files cannot disappear into an exact count. Report failure promptly,
+            // while distinguishing it from a still-pending camera save.
+            val excess = last.photosFound >= expected.photos && last.videosFound >= expected.videos &&
+                (last.photosFound > expected.photos || last.videosFound > expected.videos)
+            if (excess && last.savedMediaStable) return@withTimeoutOrNull true
             if (index + 1 < maxScans) timing.waitMs(intervalMs)
         }
         false

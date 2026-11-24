@@ -136,7 +136,11 @@ data class MediaResult(
     val videosFound: Int = 0,
     val verificationComplete: Boolean = false,
     val issues: List<String> = emptyList(),
-    val mediaEvidence: List<String> = emptyList()
+    val mediaEvidence: List<String> = emptyList(),
+    val pendingTargetFiles: Int = 0,
+    val unreadableTargetFiles: Int = 0,
+    val saveEvidence: List<String> = emptyList(),
+    val savedMediaStable: Boolean = false
 )
 
 data class ExecutionReport(
@@ -151,7 +155,9 @@ data class ExecutionReport(
     val media: MediaResult,
     val resumedFromStep: Int = 0,
     val notes: String = "",
-    val diagnostics: List<RunEvent> = emptyList()
+    val diagnostics: List<RunEvent> = emptyList(),
+    /** Non-null only when leaving the capture app could interrupt unresolved work. */
+    val handoffBlockedReason: String? = null
 )
 
 /** Whitelisted machine-readable diagnostics; no selectors, screen text, or entered text. */

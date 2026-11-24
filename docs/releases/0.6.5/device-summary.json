@@ -1,0 +1,73 @@
+[
+  {
+    "case": "counter camera third fourth presets",
+    "result": "PASS",
+    "phase": "COMPLETED",
+    "completed": 4,
+    "total": 4,
+    "skipped": 0,
+    "outcomes": [
+      "PASS",
+      "PASS",
+      "PASS",
+      "PASS"
+    ]
+  },
+  {
+    "case": "camera verification mismatch continues third fourth",
+    "result": "PASS",
+    "phase": "COMPLETED_WITH_ERRORS",
+    "completed": 4,
+    "total": 4,
+    "skipped": 0,
+    "outcomes": [
+      "PASS",
+      "FAIL",
+      "PASS",
+      "PASS"
+    ]
+  },
+  {
+    "case": "explicit stop on failure shows reason and skips third",
+    "result": "PASS",
+    "phase": "STOPPED_ON_FAILURE",
+    "completed": 2,
+    "total": 3,
+    "skipped": 1,
+    "outcomes": [
+      "PASS",
+      "FAIL"
+    ]
+  },
+  {
+    "case": "readiness rejection without dispatch permits third preset",
+    "result": "PASS",
+    "phase": "COMPLETED_WITH_ERRORS",
+    "completed": 3,
+    "total": 3,
+    "skipped": 0,
+    "outcomes": [
+      "PASS",
+      "FAIL",
+      "PASS"
+    ]
+  },
+  {
+    "case": "native video stop verification then third preset",
+    "result": "PASS",
+    "phase": "COMPLETED",
+    "completed": 3,
+    "total": 3,
+    "skipped": 0,
+    "outcomes": [
+      "PASS",
+      "PASS",
+      "PASS"
+    ]
+  },
+  {
+    "case": "original presets unchanged",
+    "result": "PASS",
+    "preservedPresets": 6
+  }
+]

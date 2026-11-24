@@ -1,0 +1,37 @@
+{
+  "result": "PASS",
+  "withoutInstrumentation": true,
+  "completed": 3,
+  "total": 3,
+  "order": [
+    "counter one",
+    "native photo",
+    "counter two"
+  ],
+  "outcomes": [
+    "PASS",
+    "PASS",
+    "PASS"
+  ],
+  "defaultStopOnFail": false,
+  "counterBefore": {
+    "one": {
+      "dialog": 4,
+      "main": 26
+    },
+    "two": {
+      "main": 47
+    }
+  },
+  "counterAfter": {
+    "one": {
+      "dialog": 4,
+      "main": 27
+    },
+    "two": {
+      "main": 48
+    }
+  },
+  "uiStatus": "3/3 Batch finished",
+  "uiResults": "Results: 065 Test A counter: PASS, 065 Test B native photo: PASS, 065 Test C counter: PASS"
+}

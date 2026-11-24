@@ -4,19 +4,19 @@ Android touch recording and playback for authorised app testing.
 
 ## Latest APK and documents
 
-**[Download 0.6.4-dev and supporting files](https://github.com/Mehul-Mridul/Android-Testing/releases/tag/v0.6.4-dev)** · **[Keyboard repair and physical test report](docs/releases/0.6.4/Keyboard-repair-status.md)** · **[Logo sources](branding/)**
+**[Download 0.6.5-dev and supporting files](https://github.com/Mehul-Mridul/Android-Testing/releases/tag/v0.6.5-dev)** · **[Batch repair and phone validation](docs/releases/0.6.5/Batch-handoff-repair.md)** · **[Logo sources](branding/)**
 
-Version **0.6.4-dev (version code 12)** keeps the touch controls visible when a keyboard opens, preserves the coordinate frame, excludes keyboard/password input and guards replay against keyboard/window changes. Capture layers also exclude the movable controls so Back/Stop taps reach them reliably. It retains the batch repairs from 0.6.3 and the existing logo.
+Version **0.6.5-dev (version code 13)** fixes batch continuation after media-verification failures, false save barriers after rejected touches, and silent early completion. Media reads have bounded caller waits; the batch displays scan progress, stop reasons and skipped presets. It retains the 0.6.4 keyboard repair and existing logo.
 
-**72 automated tests**, lint and debug/release builds passed. Physical checks on iQOO 9T / Android 14 passed the isolated keyboard recording/replay sequence and Instagram's local Story keyboard → Back → further touches → Discard. The normal signed APK was separately tested without instrumentation and is installed on the phone. Six original saved presets were preserved.
+**83 automated tests**, lint and debug/release builds passed. On iQOO 9T / Android 14, the six-case camera/handoff matrix and nine-case Stop/lifecycle matrix passed. The normal signed APK separately completed counter → native photo → counter without instrumentation. It is installed on the phone; six original presets were preserved.
 
-Typing is not recorded or replayed. Samsung phones/tablets were not physically tested here. Instagram replay/media verification and the full batch device matrix were not rerun in this keyboard-focused release. See the versioned report for exact evidence and limits; [0.6.3 batch evidence](docs/releases/0.6.3/Batch-repair-status.md) remains available.
+Batch now defaults to continuing after ordinary verification failures once saving is safe. Stop on failure remains available. Pending/unresolved capture states always block with a reason. Samsung firmware was not physically tested; these results do not certify every Samsung/app configuration. See the report for exact scope and evidence.
 
 ![Capture Automator logo](branding/capture-automator-logo.png)
 
 ## Install and record
 
-1. Download `3P-Capture-Automator-0.6.4-dev.apk` from Releases. Use the debug APK only for diagnostics.
+1. Download `3P-Capture-Automator-0.6.5-dev.apk` from Releases. Use the debug APK only for diagnostics.
 2. Update the matching-signature app without uninstalling or clearing storage. If Android reports a signature mismatch, stop and export presets before considering a different installation. The APK uses a local development signing key; certificate details and checksums are supplied with the release.
 3. Enable Automator Accessibility through Android Settings, and grant the photo/video access needed for verification. After an update, reconnect Accessibility if Android leaves it disconnected. No protection bypass is provided.
 4. Choose **Record new automation** and record one app at a time. Touch paths and timing are saved; app opening, Back and Recents use Accessibility assistance. Keyboard typing and password entry remain native and are not recorded/replayed; app touches and Back can continue around them.

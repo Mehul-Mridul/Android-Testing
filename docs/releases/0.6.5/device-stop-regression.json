@@ -1,0 +1,83 @@
+[
+  {
+    "case": "stop during startup cleanup",
+    "sessionId": "a8b7eaf2-073e-45a9-9fdd-fa913c624e22",
+    "phase": "CANCELLED",
+    "stopLatencyMs": 3,
+    "reports": [],
+    "result": "PASS"
+  },
+  {
+    "case": "stop during recorded delay",
+    "sessionId": "f5a0bb9f-a170-4329-9a2f-7a7ccde59023",
+    "phase": "CANCELLED",
+    "stopLatencyMs": 52,
+    "reports": [
+      "CANCELLED"
+    ],
+    "result": "PASS"
+  },
+  {
+    "case": "notification Stop while paused",
+    "sessionId": "da393def-a355-4f7a-aee4-e2cf6b71067d",
+    "phase": "CANCELLED",
+    "stopLatencyMs": 51,
+    "reports": [
+      "CANCELLED"
+    ],
+    "result": "PASS"
+  },
+  {
+    "case": "stop during media verification",
+    "sessionId": "2516091b-37cd-4f80-a5d1-c9d720caa697",
+    "phase": "CANCELLED",
+    "stopLatencyMs": 52,
+    "reports": [
+      "CANCELLED"
+    ],
+    "result": "PASS"
+  },
+  {
+    "case": "stop during final cleanup",
+    "sessionId": "e994978b-4238-420a-9ff4-c2240b442659",
+    "phase": "CANCELLED",
+    "stopLatencyMs": 4,
+    "reports": [
+      "PASS"
+    ],
+    "result": "PASS"
+  },
+  {
+    "case": "accessibility interruption",
+    "sessionId": "994f6c61-98d1-4fe9-b57d-8419c55e8c6e",
+    "phase": "CANCELLED",
+    "stopLatencyMs": 67,
+    "reports": [
+      "CANCELLED"
+    ],
+    "result": "PASS"
+  },
+  {
+    "case": "pause then resume two presets",
+    "sessionId": "db4019da-e14e-421e-aa55-35199fd6e40d",
+    "result": "PASS"
+  },
+  {
+    "case": "three presets after own task removal",
+    "sessionId": "55812f27-bea4-4730-81bc-de1d57b04aac",
+    "reports": [
+      "PASS",
+      "PASS",
+      "PASS"
+    ],
+    "cleanup": [
+      "Clearing Recents before batch: RECENTS_CLEAR_REQUESTED: clear accepted; Android can retain protected tasks",
+      "Clearing Recents after batch: RECENTS_CLEAR_REQUESTED: clear accepted; Android can retain protected tasks"
+    ],
+    "result": "PASS"
+  },
+  {
+    "case": "original presets preserved",
+    "result": "PASS"
+  }
+]

@@ -24,7 +24,9 @@ data class BatchUiState(
     val sessionId: String = "",
     val phase: String = "IDLE",
     val stopping: Boolean = false,
-    val cancelled: Boolean = false
+    val cancelled: Boolean = false,
+    val detail: String = "",
+    val skipped: Int = 0
 )
 
 object BatchController {
@@ -81,6 +83,7 @@ object BatchController {
         }
         job = scope.launch {
             var unsafeToCleanup = false
+            var haltReason = ""
             val timing = PlaybackTiming {
                 currentCoroutineContext().ensureActive()
                 while (paused) { delay(100); currentCoroutineContext().ensureActive() }
@@ -118,11 +121,14 @@ object BatchController {
                 execute = { preset ->
                     timing.waitMs(0)
                     mutable.value = mutable.value.copy(position = mutable.value.position + 1)
+                    mutable.value=mutable.value.copy(detail="Launching prepared preset")
                     stage("RUNNING_PRESET", preset.name)
                     service.showIndicator(false, "Batch ${mutable.value.position}/${presets.size}: ${preset.name}")
                     ExecutionEngine(app, service,
-                        onProgress = { _, step, _ -> mutable.value = mutable.value.copy(current = "${preset.name}: ${step.label}") },
-                        gate = { timing.waitMs(0) }).execute(BatchPolicy.forExecution(preset))
+                        onProgress = { index, step, _ -> mutable.value = mutable.value.copy(current = "${preset.name}: ${step.label}",
+                            detail="Step ${index+1}/${preset.steps.size}") },
+                        gate = { timing.waitMs(0) },
+                        onStatus = { message -> mutable.value=mutable.value.copy(detail=message) }).execute(BatchPolicy.forExecution(preset))
                 },
                 onResult = { report ->
                     mutable.value = mutable.value.copy(reports = mutable.value.reports + report)
@@ -131,10 +137,14 @@ object BatchController {
                 },
                 save = { repository.saveReport(it) },
                 stopAfter = { report ->
-                    unsafeToCleanup = report.outcome == Outcome.CANCELLED ||
-                        report.results.any { it.message.startsWith("App switch withheld") } ||
-                        report.media.issues.any { it.contains("deadline reached") }
-                    unsafeToCleanup || (stopOnFail && report.outcome != Outcome.PASS)
+                    val decision=BatchPolicy.decide(report,stopOnFail)
+                    unsafeToCleanup=decision.unsafe
+                    if(decision.stop) {
+                        haltReason="${report.presetName}: ${decision.reason}"
+                        mutable.value=mutable.value.copy(error=haltReason,skipped=(presets.size-mutable.value.position).coerceAtLeast(0))
+                    }
+                    event(if(decision.stop) "HANDOFF_BLOCKED" else "HANDOFF_ALLOWED",decision.reason)
+                    decision.stop
                 },
                 after = {
                     if (unsafeToCleanup) {
@@ -154,8 +164,22 @@ object BatchController {
                     // No suspending I/O before releasing ownership, even in a cancelled coroutine.
                     val value = mutable.value
                     var finished = value.copy(running = false, paused = false, stopping = false,
-                        phase = if (value.cancelled) "CANCELLED" else if (value.error.isNotBlank()) "FAILED" else "COMPLETED",
-                        current = if (value.cancelled) "Batch stopped" else "Batch finished")
+                        skipped=(value.total-value.position).coerceAtLeast(0),
+                        detail=haltReason.ifBlank { if(value.cancelled) stopReason else "" },
+                        phase = when {
+                            value.cancelled -> "CANCELLED"
+                            unsafeToCleanup -> "BLOCKED"
+                            haltReason.isNotBlank() && value.position<value.total -> "STOPPED_ON_FAILURE"
+                            value.error.isNotBlank() && haltReason.isBlank() -> "FAILED"
+                            value.reports.any { it.outcome!=Outcome.PASS } -> "COMPLETED_WITH_ERRORS"
+                            else -> "COMPLETED"
+                        },
+                        current = when {
+                            value.cancelled -> "Batch stopped"
+                            value.position<value.total -> "Batch ended after ${value.position} of ${value.total} presets"
+                            value.reports.any { it.outcome!=Outcome.PASS } -> "Batch finished with failed or unverified presets"
+                            else -> "Batch finished"
+                        })
                     try {
                         runCatching { service.clearIndicator() }.onFailure { event("NOTIFICATION_CLEAR_FAILED") }
                         runCatching { checkpoint(app, finished) }.onFailure {

@@ -5,7 +5,8 @@ import android.view.accessibility.AccessibilityNodeInfo
 import com.example.captureautomator.core.*
 
 /** Reads only known camera controls, and only when called by explicit recording/playback. */
-class CameraUi(private val service: AutomationAccessibilityService, private val timing: PlaybackTiming) {
+class CameraUi(private val service: AutomationAccessibilityService, private val timing: PlaybackTiming,
+               private val onCaptureDispatch: () -> Unit = {}) {
     private val ui = UiResolver(service, timing)
     var recordingStartedAtElapsedMs: Long? = null
         private set
@@ -94,6 +95,7 @@ class CameraUi(private val service: AutomationAccessibilityService, private val 
                     timing.waitUntil(start + videoDurationMs, android.os.SystemClock::elapsedRealtime)
                 }
             }, onDispatch = {
+                onCaptureDispatch()
                 dispatchedAt = android.os.SystemClock.elapsedRealtime()
                 if (kind == ActionKind.START_VIDEO) recordingStartedAtElapsedMs = dispatchedAt
             }) {

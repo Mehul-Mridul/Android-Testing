@@ -1,0 +1,17 @@
+3P Capture Automator 0.6.5-dev — version code 13
+
+Use 3P-Capture-Automator-0.6.5-dev.apk for normal use; the debug APK is diagnostic only.
+Both use the preserved local development signing key, not a Play Store production key.
+
+Certificate SHA-256:
+48bd3b4b11fefe1bccd94453a30cb9d6be6a1ad54244c1db41d840613de86c46
+
+Install as a matching-signature UPDATE. Do not uninstall or clear storage; presets/history can be lost. If Android reports a signature mismatch, stop and export presets before considering another installation. Check SHA256SUMS.txt and signature.txt. No protection bypass is provided.
+
+The exact normal release APK is installed on the inspected iQOO phone. Reconnect the existing Accessibility service through Android Settings if a later update leaves it disconnected. Keep full shared photo/video permission for verification. This release requests no new permissions.
+
+Batch defaults to continuing after verification failures once capture saving is safe. Enable Stop batch when a preset fails or is unverifiable if you want early termination. Missing/pending/unsafe captures still stop with a visible reason. Failure is never converted to PASS simply to continue.
+
+Prepare each app's recorded starting screen and choose presets in playback order. Record one app per preset. Expected media counts must match actual local saves. Existing presets are not rewritten; use a new/calibrated copy after device/app/layout changes. Keyboard typing/passwords are not recorded or replayed.
+
+Samsung firmware needs a retest; iQOO validation does not certify every Samsung camera/window/task configuration.

@@ -1,0 +1,14 @@
+{
+  "removedTemporaryPresets": [
+    "065 Test A counter",
+    "065 Test B native photo",
+    "065 Test C counter"
+  ],
+  "originalSavedPresets": 6,
+  "originalPresetJsonVerifiedBeforeNormalSetup": true,
+  "testHarnessRemoved": true,
+  "preExistingCounterFixturesRetained": true,
+  "rotationRestored": true,
+  "stayAwakeSettingRestored": true,
+  "testMediaNotDeleted": true
+}

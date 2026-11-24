@@ -15,11 +15,14 @@ class ExecutionEngine(
     private val context: Context,
     private val service: AutomationAccessibilityService,
     private val onProgress: (Int, AutomationStep, List<StepResult>) -> Unit,
-    private val gate: suspend () -> Unit
+    private val gate: suspend () -> Unit,
+    private val onStatus: (String) -> Unit = {}
 ) {
     private val timing = PlaybackTiming(gate)
     private val ui = UiResolver(service, timing)
-    private val camera = CameraUi(service, timing)
+    private var forwardedInput = false
+    private val camera = CameraUi(service, timing) { forwardedInput = true }
+    private var handoffBlockedReason: String? = null
     private var lastMediaScan: MediaResult? = null
     private var previousTouchEnd: Long? = null
     private val touchStartAccepted = mutableSetOf<String>()
@@ -75,6 +78,7 @@ class ExecutionEngine(
             }
         }
         gate()
+        onStatus("Reading pre-run media inventory")
         val baseline = verifier.baseline()
         event("BASELINE", values = mapOf("ids" to baseline.ids.size.toString(),
             "permission" to baseline.fullPermission.toString(), "readable" to baseline.readable.toString()))
@@ -146,8 +150,8 @@ class ExecutionEngine(
                                 segmentStart = System.currentTimeMillis()
                                 segmentPackage = step.packageName
                                 touched = false
+                                forwardedInput = false
                             }
-                            if (capture || step.kind == ActionKind.TAP) touched = true
                             perform(step, preset)
                         }
                     }
@@ -157,6 +161,7 @@ class ExecutionEngine(
                         throw e
                     }
                     catch (e: Exception) { false to "Action error: ${e.javaClass.simpleName}" }
+                    touched = touched || forwardedInput || (step.kind == ActionKind.TAP && actionResult.first)
                     event(if (capture) "CAPTURE_GESTURE_RESULT" else "ACTION_RESULT", step, attempt,
                         mapOf("completed" to actionResult.first.toString(), "mediaConfirmed" to "false",
                             "status" to if (capture) actionResult.second.substringBefore(':') else step.kind.name))
@@ -194,17 +199,30 @@ class ExecutionEngine(
         gate()
         val verdict = Verdict.outcome(stepResults, media, preset.media)
         val outcome = if (stepResults.size != preset.steps.size && verdict == Outcome.PASS) Outcome.FAIL else verdict
+        val finalCameraState=camera.state()
+        handoffBlockedReason = when {
+            switchBlocked -> "Previous app save barrier was not satisfied"
+            startedVideoAtElapsedMs != null -> "A started video has no confirmed stop"
+            finalCameraState == CameraState.RECORDING -> "Camera is still recording; stop it before switching apps"
+            stepResults.any { it.message.startsWith("TOUCH_GESTURE_FAILED_OR_UNCERTAIN") } -> "A dispatched touch has an uncertain result; inspect the capture app"
+            else -> BatchPolicy.saveBlockReason(media, preset.media, touched,
+                finalCameraState in setOf(CameraState.PHOTO_READY,CameraState.VIDEO_READY))
+        }
+        event("APP_HANDOFF", values = mapOf("safe" to (handoffBlockedReason == null).toString(),
+            "reason" to handoffBlockedReason.orEmpty()))
+        onStatus(if(handoffBlockedReason == null) "Returning to Automator" else "Capture state needs attention")
+        // Do not background a night capture or an active video when a save is unresolved.
         fun returnToAutomator() = AndroidDevice.launch(context, context.packageName)
-        val returned = returnToAutomator() && ui.waitForApp(context.packageName, 5000)
-        var cleanup = if (returned) "" else "Could not return to Automator"
+        val returned = handoffBlockedReason == null && returnToAutomator() && ui.waitForApp(context.packageName, 5000)
+        var cleanup = handoffBlockedReason ?: if (returned) "" else "Could not return to Automator"
         if (preset.clearRecentsAfterRun == true) {
-            cleanup = if (returned && !switchBlocked) {
+            cleanup = if (returned && handoffBlockedReason == null) {
                 try { RecentAppsCleanup.clear(service, timing) }
                 catch (e: CancellationException) { throw e }
                 catch (_: Exception) { "RECENTS_UNAVAILABLE: close recent apps manually" }
             } else "RECENTS_SKIPPED: app return or save barrier incomplete"
             gate()
-            returnToAutomator()
+            if(handoffBlockedReason == null) returnToAutomator()
             event("RECENTS_CLEANUP", values = mapOf("status" to cleanup.substringBefore(':')))
         }
         return report(preset, startedAt, outcome, stepResults, media, 0,
@@ -224,19 +242,22 @@ class ExecutionEngine(
             presetId = preset.id, presetName = preset.name, device = AndroidDevice.profile(context),
             startedAt = started, endedAt = System.currentTimeMillis(), outcome = outcome,
             results = steps, media = media, resumedFromStep = resume, notes = note,
-            diagnostics = events.toList())
+            diagnostics = events.toList(), handoffBlockedReason = handoffBlockedReason)
     }
 
     private suspend fun verifyMedia(baseline: MediaVerifier.Snapshot, preset: Preset, started: Long): MediaResult {
+        onStatus("Checking saved media; waiting for the target app to finish saving")
         event("MEDIA_VERIFICATION_STARTED")
         val result = verifier.poll(baseline, preset.media, preset.apps.map { it.packageName }.toSet(),
             started, timing) { scan, snapshot ->
             lastMediaScan = snapshot
+            onStatus("Checking saved media $scan/61: ${snapshot.photosFound}/${preset.media.photos} photos, ${snapshot.videosFound}/${preset.media.videos} videos; ${snapshot.pendingTargetFiles} pending")
             val photos = snapshot.photosFound
             val videos = snapshot.videosFound
             val complete = snapshot.verificationComplete
             event("MEDIA_SCAN", values = mapOf("scan" to scan.toString(), "photos" to photos.toString(),
-                "videos" to videos.toString(), "complete" to complete.toString()))
+                "videos" to videos.toString(), "complete" to complete.toString(),
+                "pending" to snapshot.pendingTargetFiles.toString(), "saveStable" to snapshot.savedMediaStable.toString()))
         }
         event("MEDIA_VERIFICATION_FINISHED", values = mapOf("photos" to result.photosFound.toString(),
             "videos" to result.videosFound.toString(), "complete" to result.verificationComplete.toString()))
@@ -331,13 +352,13 @@ class ExecutionEngine(
                             TouchEnvironment.keyboardVisible(service) == (step.expectsKeyboard ?: false) &&
                             (step.touchWindow == null || TouchEnvironment.appViewport(service, frame) == step.touchWindow) &&
                             TouchEnvironment.windowStable(service, frame)
-                    }, onDispatch = { previousTouchEnd = SystemClock.elapsedRealtime() + stroke.durationMs })
+                    }, onDispatch = { forwardedInput=true;previousTouchEnd = SystemClock.elapsedRealtime() + stroke.durationMs })
                 }
             }
             ActionKind.TAKE_PHOTO, ActionKind.START_VIDEO, ActionKind.STOP_VIDEO -> {
                 if (pkg == null) false to "No target package"
                 else if (pkg == CameraPolicy.PACKAGE) camera.capture(step.kind, step.timeoutMs, preset.media.videoDurationMs)
-                else ui.capture(step.locator, pkg, step.timeoutMs)
+                else ui.capture(step.locator, pkg, step.timeoutMs, onDispatch={forwardedInput=true})
             }
             ActionKind.SELECT_PHOTO_MODE, ActionKind.SELECT_VIDEO_MODE -> {
                 if (pkg != CameraPolicy.PACKAGE) false to "Camera mode adapter is unavailable for this package"

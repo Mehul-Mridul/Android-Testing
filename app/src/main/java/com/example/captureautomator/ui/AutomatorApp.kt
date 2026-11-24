@@ -689,10 +689,12 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
 @Composable private fun BatchPage(rows: List<PresetRow>, state: BatchUiState,
                                   onRun: (List<String>, Boolean) -> Unit) {
     val selected = remember { mutableStateListOf<String>() }
-    var stopOnFail by remember { mutableStateOf(true) }
+    var stopOnFail by remember { mutableStateOf(false) }
     Column {
         Heading("Batch execution", "Select presets in playback order. Start each app on its recorded screen. Batch clears Recents before and after playback.")
         Text("${state.position}/${state.total} ${state.current}")
+        if(state.detail.isNotBlank()) Text(state.detail,style=MaterialTheme.typography.bodySmall)
+        if(!state.running && state.skipped>0) Text("${state.skipped} remaining presets were not run.")
         if (state.error.isNotBlank()) Text(state.error, color = MaterialTheme.colorScheme.error)
         state.cleanupDetails.lastOrNull()?.let {
             Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -709,6 +711,7 @@ private fun NotificationsAvailable(context: android.content.Context): Boolean =
                 Checkbox(stopOnFail, { stopOnFail = it })
                 Text("Stop batch when a preset fails or is unverifiable")
             }
+            Text("When unchecked, verification failures are reported and the next preset runs once saving is safe. An active or unresolved capture always stops the batch.",style=MaterialTheme.typography.bodySmall)
             StudioPrimary(onClick = { onRun(selected.toList(), stopOnFail) }, enabled = selected.isNotEmpty()) {
                 Text("Start prepared batch (${selected.size})")
             }

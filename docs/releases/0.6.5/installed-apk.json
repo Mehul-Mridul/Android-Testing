@@ -1,0 +1,10 @@
+{
+  "versionName": "0.6.5-dev",
+  "versionCode": 13,
+  "sha256": "228a988568071bc0ece0d15cca29877bef828344370277a641b7a00e3f501fa5",
+  "installedFileExactlyMatches": true,
+  "accessibilityConnected": true,
+  "testHarnessRemoved": true,
+  "normalBatch": "PASS; 3 of 3 including native camera in position 2",
+  "phoneSettingsRestored": true
+}
